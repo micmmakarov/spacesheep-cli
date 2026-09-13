@@ -1,0 +1,13 @@
+{
+  "name": "spacesheep",
+  "version": "1.0.0",
+  "description": "Publish web pages to spacesheep.dev from a terminal or CI: `npx spacesheep deploy ./dist`",
+  "bin": { "spacesheep": "./bin/spacesheep.js" },
+  "files": ["bin", "lib", "README.md", "LICENSE"],
+  "engines": { "node": ">=20" },
+  "keywords": ["spacesheep", "deploy", "static-site", "publish", "cli", "github-actions", "mcp", "hosting"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/micmmakarov/spacesheep-cli" },
+  "homepage": "https://spacesheep.dev",
+  "bugs": "https://github.com/micmmakarov/spacesheep-cli/issues"
+}

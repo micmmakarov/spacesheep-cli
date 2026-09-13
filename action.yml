@@ -1,0 +1,73 @@
+name: Deploy to Spacesheep
+description: Publish a folder of static files (or one HTML file) to spacesheep.dev on every push.
+author: Michael Makarov
+branding: { icon: upload-cloud, color: green }
+inputs:
+  key:
+    description: A Spacesheep API key (spacesheep.dev/settings → API keys). Store it as a repository secret.
+    required: true
+  dir:
+    description: Folder with an index.html (or a single .html file) to publish.
+    default: "."
+  space:
+    description: UUID or spacesheep.dev URL of the space to update. Omit to use the .spacesheep.json in the folder, or to create a new space.
+    required: false
+  title:
+    description: Title for a new space.
+    required: false
+  slug:
+    description: URL slug for a new space (spacesheep.dev/@you/<slug>).
+    required: false
+  emoji:
+    description: Emoji icon for a new space.
+    required: false
+  description:
+    description: One-line description for a new space.
+    required: false
+  visibility:
+    description: "Who can view a new space: public, signed_in, members or private (default)."
+    required: false
+  org:
+    description: Org slug to publish under.
+    required: false
+  message:
+    description: Version name shown in the space's history. Defaults to the commit message.
+    required: false
+outputs:
+  url:
+    description: The published URL.
+    value: ${{ steps.deploy.outputs.url }}
+  uuid:
+    description: The space's UUID.
+    value: ${{ steps.deploy.outputs.uuid }}
+  sha:
+    description: The deployed version's sha.
+    value: ${{ steps.deploy.outputs.sha }}
+runs:
+  using: composite
+  steps:
+    - id: deploy
+      shell: bash
+      env:
+        SPACESHEEP_KEY: ${{ inputs.key }}
+        IN_SPACE: ${{ inputs.space }}
+        IN_TITLE: ${{ inputs.title }}
+        IN_SLUG: ${{ inputs.slug }}
+        IN_EMOJI: ${{ inputs.emoji }}
+        IN_DESC: ${{ inputs.description }}
+        IN_VIS: ${{ inputs.visibility }}
+        IN_ORG: ${{ inputs.org }}
+        IN_MSG: ${{ inputs.message }}
+        HEAD_MSG: ${{ github.event.head_commit.message }}
+      run: |
+        args=()
+        [ -n "$IN_SPACE" ] && args+=(--space "$IN_SPACE")
+        [ -n "$IN_TITLE" ] && args+=(--title "$IN_TITLE")
+        [ -n "$IN_SLUG" ] && args+=(--slug "$IN_SLUG")
+        [ -n "$IN_EMOJI" ] && args+=(--emoji "$IN_EMOJI")
+        [ -n "$IN_DESC" ] && args+=(--description "$IN_DESC")
+        [ -n "$IN_VIS" ] && args+=(--visibility "$IN_VIS")
+        [ -n "$IN_ORG" ] && args+=(--org "$IN_ORG")
+        msg="${IN_MSG:-${HEAD_MSG%%$'\n'*}}"
+        [ -n "$msg" ] && args+=(-m "$msg")
+        npx --yes spacesheep@latest deploy "${{ inputs.dir }}" "${args[@]}"
