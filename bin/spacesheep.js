@@ -52,11 +52,13 @@ function parse(argv) {
     else if (a === "-m" || a === "--message" || a === "--version-name") opts.versionName = take();
     else if (a === "--email") opts.emails.push(take());
     else if (a.startsWith("--") && a.includes("=")) { const [k, v] = a.slice(2).split(/=(.*)/); opts[camel(k)] = v; }
+    else if (FLAGS.has(a)) opts[camel(a.slice(2))] = true;
     else if (a.startsWith("--")) opts[camel(a.slice(2))] = take();
     else opts._.push(a);
   }
   return opts;
 }
+const FLAGS = new Set(["--no-manifest"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
 const log = (...a) => { if (!process.env.SPACESHEEP_QUIET) console.error(...a); };
@@ -137,7 +139,8 @@ const commands = {
 };
 
 (async () => {
-  const opts = parse(process.argv.slice(2));
+  let opts;
+  try { opts = parse(process.argv.slice(2)); } catch (e) { console.error(`\n  ✗ ${e.message}\n`); process.exit(2); }
   const cmd = opts._.shift();
   if (opts.version) return out(pkg.version);
   if (!cmd || opts.help || !commands[cmd]) {
