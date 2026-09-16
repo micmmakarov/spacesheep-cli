@@ -53,6 +53,34 @@ The same thing without the action:
           SPACESHEEP_KEY: ${{ secrets.SPACESHEEP_KEY }}
 ```
 
+## Remember every Claude Code and Codex session
+
+`spacesheep memory install` wires a hook into Claude Code (`Stop` and `SessionEnd`
+in `~/.claude/settings.json`) and Codex (`notify` in `~/.codex/config.toml`). From
+then on every turn you exchange with either tool lands in your spacesheep memory as
+it happens, with `claude-code` or `codex` as its source, and is searchable from
+inside the tools (`recall_history`, `recall_memory` through the spacesheep MCP),
+on [your memory board](https://spacesheep.dev/me/memory), and by any spacesheep
+agent you talk to.
+
+```bash
+npm i -g spacesheep
+spacesheep login
+spacesheep memory install        # --claude or --codex for one of them
+spacesheep memory status
+```
+
+The hook never slows the tool: Claude Code waits for a `Stop` hook to exit, so
+`memory sync` reads stdin, writes a job file, spawns itself detached and exits 0 in
+the time Node takes to start. The child tails the transcript from a per-session
+cursor, posts the new turns (your messages and the assistant's text only — tool
+calls, diffs and tool output never leave the machine), and advances the cursor
+only on success, so an outage costs delay, never a turn. Install from a global
+install, not `npx`: a hook has to start in milliseconds.
+
+Codex takes one `notify` command. If yours is already set, `install` leaves it
+alone and prints the line to add to a wrapper script.
+
 ## Commands
 
 | Command | What it does |

@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 "use strict";
+// `memory sync` is a Claude Code / Codex hook: the tool waits for it to exit, so
+// it runs before anything else is required and never touches the MCP client.
+if (process.argv[2] === "memory" && process.argv[3] === "sync") {
+  require("../lib/memory").sync(process.argv.slice(4));
+  return;
+}
 const fs = require("fs");
 const path = require("path");
 const pkg = require("../package.json");
@@ -22,6 +28,8 @@ const HELP = `
     spacesheep versions <space>            version history
     spacesheep share <space> [--visibility v] [--email a@b.c ...]
     spacesheep update                      install the newest version globally
+    spacesheep memory install [--claude] [--codex]   remember every Claude Code / Codex session in spacesheep
+    spacesheep memory status | uninstall   what is wired and synced; remove the hooks
 
   deploy options
     --space <uuid|url>       update this space (else the .spacesheep.json in the folder, else create)
@@ -58,7 +66,7 @@ function parse(argv) {
   }
   return opts;
 }
-const FLAGS = new Set(["--no-manifest"]);
+const FLAGS = new Set(["--no-manifest", "--claude", "--codex"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
 const log = (...a) => { if (!process.env.SPACESHEEP_QUIET) console.error(...a); };
@@ -136,6 +144,14 @@ const commands = {
     out(r);
   },
   async update() { selfUpdate(log); },
+  async memory(opts) {
+    const mem = require("../lib/memory");
+    const sub = opts._[0];
+    if (sub === "install") return mem.install(opts, log);
+    if (sub === "uninstall") return mem.uninstall(opts, log);
+    if (sub === "status") return mem.status(opts, out);
+    throw new Error("usage: spacesheep memory install [--claude] [--codex] | uninstall | status");
+  },
 };
 
 (async () => {
