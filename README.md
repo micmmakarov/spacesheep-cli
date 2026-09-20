@@ -86,6 +86,7 @@ alone and prints the line to add to a wrapper script.
 | Command | What it does |
 |---|---|
 | `spacesheep login` | Browser sign-in; stores a key in `~/.config/spacesheep/config.json` |
+| `spacesheep connect <ss_key> [name]` | Sign in with no browser. Mints this machine its own key, named after its hostname (or `name`), and stores that; the pasted key is never written to disk |
 | `spacesheep logout` | Forget the stored key |
 | `spacesheep whoami` | Who the current key belongs to |
 | `spacesheep deploy [dir\|file]` | Publish. Options: `--space`, `--title`, `--slug`, `--emoji`, `--description`, `--visibility`, `--org`, `-m <version name>`, `--json` |
@@ -96,6 +97,21 @@ alone and prints the line to add to a wrapper script.
 | `spacesheep update` | Install the newest version globally |
 
 `<space>` is a UUID or a `spacesheep.dev/@user/slug` URL.
+
+## Machines that can't open a browser
+
+A lab box, a server, a shared workstation: create a key at
+<https://spacesheep.dev/settings/api-keys#create> and paste the one line the page
+shows on each machine (Node 18+):
+
+```bash
+npx -y spacesheep@latest connect ss_…            # key named after the hostname
+npx -y spacesheep@latest connect ss_… bench-03    # or name it yourself
+```
+
+Each machine ends up with its own key, listed by name in Settings and revocable on
+its own. The pasted key is never stored, so you can revoke it once every box is
+connected and they all keep working.
 
 ## Auth
 

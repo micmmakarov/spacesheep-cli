@@ -11,7 +11,8 @@ const path = require("path");
 const pkg = require("../package.json");
 const cfg = require("../lib/config");
 const { McpClient } = require("../lib/mcp");
-const { deviceLogin } = require("../lib/login");
+const os = require("os");
+const { deviceLogin, connectWithKey } = require("../lib/login");
 const { deploy } = require("../lib/deploy");
 const { updateNotice, selfUpdate } = require("../lib/update");
 
@@ -20,6 +21,8 @@ const HELP = `
 
   Usage
     spacesheep login                       sign in through the browser (stores a key in ~/.config/spacesheep)
+    spacesheep connect <ss_key> [name]     sign in with no browser: mints this machine its own key, named
+                                           after its hostname (or <name>); the pasted key is never stored
     spacesheep logout                      forget the stored key
     spacesheep whoami                      who the stored key belongs to
     spacesheep deploy [dir|file] [opts]    publish a folder (needs index.html) or one .html file
@@ -40,7 +43,8 @@ const HELP = `
     --json                   print the server's JSON result
 
   Auth
-    SPACESHEEP_KEY           an API key (from spacesheep.dev/settings) — what CI uses instead of login
+    SPACESHEEP_KEY           an API key (spacesheep.dev/settings/api-keys) — what CI uses instead of login
+    SPACESHEEP_APP_ORIGIN    the app origin for account calls such as connect (default ${cfg.DEFAULT_APP_ORIGIN})
     SPACESHEEP_ORIGIN        MCP server origin (default ${cfg.DEFAULT_ORIGIN})
 
   In GitHub Actions:
@@ -84,16 +88,30 @@ const commands = {
     cfg.writeConfig({ ...cfg.readConfig(), key, username, origin: process.env.SPACESHEEP_ORIGIN || undefined });
     log(`\n  ✓ Signed in${username ? ` as @${username}` : ""}. Key saved to ${cfg.configPath()}\n`);
   },
+  async connect(opts) {
+    const [parent, given] = opts._;
+    if (!parent || !parent.startsWith("ss_")) throw new Error("usage: spacesheep connect <ss_key> [name] — create the key at https://spacesheep.dev/settings/api-keys#create");
+    const name = (given || os.hostname().split(".")[0] || "machine").slice(0, 60);
+    const { key, username } = await connectWithKey(cfg.appOrigin(), parent, name, log);
+    cfg.writeConfig({
+      ...cfg.readConfig(), key, username, machine: name,
+      origin: process.env.SPACESHEEP_ORIGIN || undefined,
+      appOrigin: process.env.SPACESHEEP_APP_ORIGIN || undefined,
+    });
+    // Prove the stored key works against the MCP server before saying so.
+    await client().call("list_spaces").catch((e) => { if (e.code === "EAUTH") throw e; });
+    log(`\n  ✓ Connected${username ? ` as @${username}` : ""} on "${name}". Key saved to ${cfg.configPath()}\n`);
+  },
   async logout() {
-    const c = cfg.readConfig(); delete c.key; delete c.username; cfg.writeConfig(c);
+    const c = cfg.readConfig(); delete c.key; delete c.username; delete c.machine; cfg.writeConfig(c);
     log(`  ✓ Signed out.`);
   },
   async whoami(opts) {
     const k = cfg.resolveKey();
     if (!k) throw Object.assign(new Error("not signed in"), { code: "EAUTH" });
     const c = cfg.readConfig();
-    if (opts.json) return out({ username: c.username || null, key_prefix: k.key.slice(0, 8), source: k.source });
-    out(k.source === "env" ? `key from SPACESHEEP_KEY (${k.key.slice(0, 8)}…)` : `@${c.username || "?"} (${k.key.slice(0, 8)}…, ${cfg.configPath()})`);
+    if (opts.json) return out({ username: c.username || null, key_prefix: k.key.slice(0, 8), source: k.source, machine: c.machine || null });
+    out(k.source === "env" ? `key from SPACESHEEP_KEY (${k.key.slice(0, 8)}…)` : `@${c.username || "?"}${c.machine ? ` on "${c.machine}"` : ""} (${k.key.slice(0, 8)}…, ${cfg.configPath()})`);
   },
   async deploy(opts) {
     const r = await deploy(client(), opts._[0], { ...opts, via: process.env.GITHUB_ACTIONS ? "GitHub Actions" : "CLI" }, log);
