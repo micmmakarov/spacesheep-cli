@@ -67,6 +67,7 @@ function parse(argv) {
     else if (a === "-o" || a === "--out") opts.out = take();
     else if (a === "-m" || a === "--message" || a === "--version-name") opts.versionName = take();
     else if (a === "--email") opts.emails.push(take());
+    else if (a === "--config-dir") (opts.configDir = opts.configDir || []).push(take());
     else if (a.startsWith("--") && a.includes("=")) { const [k, v] = a.slice(2).split(/=(.*)/); opts[camel(k)] = v; }
     else if (FLAGS.has(a)) opts[camel(a.slice(2))] = true;
     else if (a.startsWith("--")) opts[camel(a.slice(2))] = take();
@@ -181,6 +182,7 @@ const commands = {
     if (sub === "uninstall") return ses.uninstall(opts, log);
     if (sub === "status") return ses.status(opts, out);
     if (sub === "backfill") return ses.backfill(log);
+    if (sub === "help") return log(`  spacesheep sessions install [--machine NAME] [--ssh HOST] [--config-dir DIR ...]\n  spacesheep sessions status | uninstall | backfill`);
     throw new Error("usage: spacesheep sessions install [--machine NAME] [--ssh HOST] | status | uninstall | backfill");
   },
 };

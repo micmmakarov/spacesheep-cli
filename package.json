@@ -1,6 +1,6 @@
 {
   "name": "spacesheep",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Publish web pages to spacesheep.dev from a terminal or CI: `npx spacesheep deploy ./dist`",
   "bin": {
     "spacesheep": "./bin/spacesheep.js"
