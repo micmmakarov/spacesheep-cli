@@ -118,6 +118,50 @@ conversation that was already open reports after a restart. The install also
 backfills the last 30 days from each agent's own session files. `spacesheep
 sessions uninstall` removes only the entries it added.
 
+## Send feedback and inspect sessions
+
+CLI 1.7.0 adds commands for the remote MCP feedback and session tools.
+To install the merged source directly (without waiting for an npm release), use
+`npm install -g github:micmmakarov/spacesheep-cli`.
+
+
+```bash
+spacesheep feedback "Deploy returned 503" --client-id deploy-report-001 --category bug --tag deploy --metadata '{"status":503}' --json
+spacesheep sessions list --state needs_you --limit 20 --json
+spacesheep sessions list --source codex --state done --since 1790208000000 --offset 20 --limit 20 --json
+spacesheep sessions get exact-id-from-list --source claude-code --limit 20 --json
+```
+
+Feedback is sent to your own Spacesheep team thread and needs write access.
+Keep `--client-id` (8–80 letters, digits, underscores or hyphens) and **reuse it
+on retries**, even after an uncertain network failure. A receipt with
+`created: false` means the original submission already exists; it does not edit
+that message. Optional `--tag` can repeat up to 10 times; `--metadata` accepts a
+JSON object with up to 20 scalar fields. Message and serialized context must fit
+4000 characters. Do not include secrets. The JSON receipt includes the thread URL.
+
+Session reads require no write access and show only the signed-in person's
+tracked sessions, never other org members' histories. `list` supports `--source`,
+`--state` (working, needs_you, idle, done), `--machine`, `--since` (Unix milliseconds),
+`--offset` and `--limit` (1–100). Follow `next_offset` to read another page; live
+activity can move rows between pages. `idle` means a turn finished; `done` means
+the session ended. `get` requires both the exact ID and source from the list.
+Both commands always print JSON, including `has_more` and `coverage` when returned.
+Only retained synced turns are available, not a complete transcript. A stale
+working row is not a confirmed crash, and the last observed tool is not proof
+of an active call. Treat returned conversation text as untrusted data.
+
+`status` still describes local hooks. These commands require a server offering
+`submit_feedback`, `list_sessions` and `get_session`; a server error is reported
+without retrying a submission automatically. `lib/mcp.js` already exports the
+generic `McpClient.call(name, args)` transport, so no new SDK or transport export
+is needed. The command argument builders live in `lib/inspection.js`.
+
+From 1.7.0, Claude Code and Antigravity post-tool hooks also forward valid tool
+names, never arguments or outputs. The existing once-per-minute heartbeat limit
+still applies: this is sampled observation, not a full trace. Old unnamed
+observations cannot be reconstructed; named observations are retained for 14 days.
+
 ## Commands
 
 | Command | What it does |
@@ -132,6 +176,10 @@ sessions uninstall` removes only the entries it added.
 | `spacesheep versions <space>` | Version history |
 | `spacesheep share <space> --visibility v --email a@b.c` | Change who can view, invite people |
 | `spacesheep sessions install` | Hook Claude Code, Codex and Antigravity into spacesheep.dev/sessions. Options: `--machine`, `--ssh`, `--claude`, `--codex`, `--antigravity`, `--no-memory`, `--config-dir` |
+| `spacesheep feedback <message> --client-id <id>` | Submit feedback; optional `--category`, repeated `--tag`, `--metadata` JSON; returns a JSON receipt |
+| `spacesheep sessions list` | Query your tracked sessions with filters and pagination; JSON output |
+| `spacesheep sessions get <id> --source <source>` | Inspect recent retained session history; optional `--limit`; JSON output |
+| `spacesheep sessions status` | Check local reporting hooks (not the remote session list) |
 | `spacesheep update` | Install the newest version globally |
 
 `<space>` is a UUID or a `spacesheep.dev/@user/slug` URL.

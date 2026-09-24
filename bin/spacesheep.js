@@ -34,6 +34,14 @@ const HELP = `
     spacesheep read <space> [path] [-o dir]  print a space's files, or write them to a folder
     spacesheep versions <space>            version history
     spacesheep share <space> [--visibility v] [--email a@b.c ...]
+    spacesheep feedback <message> --client-id <id> [--category bug] [--tag deploy ...]
+                                           send feedback to the team; reuse the ID on retries
+    spacesheep sessions list [--state done] [--source codex] [--machine NAME]
+                                           inspect tracked sessions (JSON); --since ms --offset N --limit N
+    spacesheep sessions get <id> --source <source> [--limit N]
+                                           recent retained history (JSON)
+    spacesheep sessions install | status | uninstall | backfill | forget
+                                           manage local reporting hooks
     spacesheep update                      install the newest version globally
     spacesheep memory install [--claude] [--codex]   remember every Claude Code / Codex session in spacesheep
     spacesheep memory status | uninstall   what is wired and synced; remove the hooks
@@ -57,7 +65,7 @@ const HELP = `
 `;
 
 function parse(argv) {
-  const opts = { _: [], emails: [] };
+  const opts = { _: [], emails: [], tags: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const take = () => { const v = argv[++i]; if (v === undefined) throw new Error(`${a} needs a value`); return v; };
@@ -66,6 +74,7 @@ function parse(argv) {
     else if (a === "-v" || a === "--version") opts.version = true;
     else if (a === "-o" || a === "--out") opts.out = take();
     else if (a === "-m" || a === "--message" || a === "--version-name") opts.versionName = take();
+    else if (a === "--tag") opts.tags.push(take());
     else if (a === "--email") opts.emails.push(take());
     else if (a === "--config-dir") (opts.configDir = opts.configDir || []).push(take());
     else if (a.startsWith("--") && a.includes("=")) { const [k, v] = a.slice(2).split(/=(.*)/); opts[camel(k)] = v; }
@@ -166,6 +175,10 @@ const commands = {
     const r = await client().call("share_space", args);
     out(r);
   },
+  async feedback(opts) {
+    const args = require("../lib/inspection").feedbackArgs(opts);
+    out(await client().call("submit_feedback", args));
+  },
   async update() { return selfUpdate(log); },
   async memory(opts) {
     const mem = require("../lib/memory");
@@ -176,6 +189,11 @@ const commands = {
     throw new Error("usage: spacesheep memory install [--claude] [--codex] | uninstall | status");
   },
   async sessions(opts) {
+    const subcommand = opts._[0];
+    if (subcommand === "list" || subcommand === "get") {
+      const args = require("../lib/inspection").sessionArgs(opts);
+      return out(await client().call(subcommand === "list" ? "list_sessions" : "get_session", args));
+    }
     const ses = require("../lib/sessions");
     const sub = opts._[0];
     if (sub === "install") return ses.install(opts, log, process.argv.slice(3));
@@ -183,8 +201,8 @@ const commands = {
     if (sub === "status") return ses.status(opts, out);
     if (sub === "backfill") { const all = !opts.claude && !opts.codex && !opts.antigravity; return ses.backfill(log, undefined, { claude: all || !!opts.claude, codex: all || !!opts.codex, antigravity: all || !!opts.antigravity }); }
     if (sub === "forget") return ses.forget(opts, log);
-    if (sub === "help") return log(`  spacesheep sessions install [--machine NAME] [--ssh HOST] [--config-dir DIR ...] [--claude] [--codex] [--antigravity]\n  spacesheep sessions status | uninstall | backfill [--claude|--codex|--antigravity] | forget --source codex [--machine NAME]`);
-    throw new Error("usage: spacesheep sessions install [--machine NAME] [--ssh HOST] [--no-memory] | status | uninstall | backfill | forget --source codex");
+    if (sub === "help") return log(`  spacesheep sessions list [--source SOURCE] [--state STATE] [--machine NAME] [--since MS] [--offset N] [--limit N]\n  spacesheep sessions get <id> --source SOURCE [--limit N]\n  spacesheep sessions install [--machine NAME] [--ssh HOST] [--config-dir DIR ...] [--claude] [--codex] [--antigravity]\n  spacesheep sessions status | uninstall | backfill [--claude|--codex|--antigravity] | forget --source codex [--machine NAME]`);
+    throw new Error("usage: spacesheep sessions list | get <id> --source SOURCE | install [--machine NAME] [--ssh HOST] [--no-memory] | status | uninstall | backfill | forget --source codex");
   },
 };
 
