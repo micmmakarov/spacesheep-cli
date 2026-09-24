@@ -78,6 +78,18 @@ calls, diffs and tool output never leave the machine), and advances the cursor
 only on success, so an outage costs delay, never a turn. Install from a global
 install, not `npx`: a hook has to start in milliseconds.
 
+**Passwords and keys are redacted before anything is sent.** Every string the
+hooks post (your messages, the assistant's text, a session's title, a
+notification) goes through `lib/redact.js` on your machine first, and spacesheep
+runs the same rules again when it stores them. It removes the value and keeps the
+sentence: `export DB_PASSWORD=[redacted]`, `postgres://admin:[redacted]@db/app`,
+`password [redacted]`. It catches API keys and tokens by their shape (GitHub,
+OpenAI, Anthropic, AWS, Slack, Stripe, Google, JWTs, private key blocks and more),
+passwords in URLs, `Bearer` headers, `NAME=value` where the name is a secret's
+(`--password=`, `api_key:`, `GITHUB_TOKEN=`), and a generated-looking value after
+"password is …". It is pattern-based, so an unlabelled secret in plain prose can
+still get through; `spacesheep memory uninstall` stops sending anything.
+
 Codex takes one `notify` command. If yours is already set, `install` leaves it
 alone and prints the line to add to a wrapper script.
 
