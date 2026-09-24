@@ -45,6 +45,15 @@ describe("ping --antigravity", () => {
     assert.strictEqual(hook("prompt", { conversationId: ID, invocationNum: 3 }).jobs[0].event, "tool");
   });
 
+  it("forwards only a valid tool name, never its arguments or output", () => {
+    const r = hook("tool", { conversationId: ID, toolName: "mcp__repo.read", toolInput: { secret: "do-not-send" }, toolOutput: "private" });
+    assert.strictEqual(r.jobs[0].tool_name, "mcp__repo.read");
+    assert.ok(!JSON.stringify(r.jobs).includes("do-not-send"));
+    assert.ok(!JSON.stringify(r.jobs).includes("private"));
+    assert.strictEqual(hook("tool", { conversationId: ID, toolName: "Bash secret args" }).jobs[0].tool_name, undefined);
+    assert.strictEqual(hook("stop", { conversationId: ID, toolName: "Bash" }).jobs[0].tool_name, undefined);
+  });
+
   it("drops a ping with no id rather than inventing one", () => {
     assert.strictEqual(hook("prompt", { workspacePaths: ["/w"] }).jobs.length, 0);
   });
