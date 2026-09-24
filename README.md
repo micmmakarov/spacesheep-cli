@@ -81,24 +81,6 @@ install, not `npx`: a hook has to start in milliseconds.
 Codex takes one `notify` command. If yours is already set, `install` leaves it
 alone and prints the line to add to a wrapper script.
 
-## See every session, live, on spacesheep.dev/sessions
-
-```bash
-npx -y spacesheep@latest sessions install --machine "My laptop"   # optional: --ssh user@host
-```
-
-It adds session hooks to Claude Code (start, prompt, tool heartbeat, notification,
-stop, end) plus the memory sync, forwards Codex's `notify`, and backfills the last 30
-days of sessions already on the machine. [spacesheep.dev/sessions](https://spacesheep.dev/sessions)
-then shows which sessions are working, which need you, which are idle, on which
-machine, with the command that reopens each one. A ping carries state and place
-(machine, folder, repo, branch, model, title), never what was said. Run through `npx`,
-it installs itself globally first so the hooks start in milliseconds. The hooks always
-exit 0 and never block a session.
-
-`spacesheep sessions status` shows what is wired and the last ping;
-`spacesheep sessions uninstall` removes the hooks.
-
 ## Commands
 
 | Command | What it does |

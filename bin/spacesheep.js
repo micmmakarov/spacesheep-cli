@@ -37,9 +37,6 @@ const HELP = `
     spacesheep update                      install the newest version globally
     spacesheep memory install [--claude] [--codex]   remember every Claude Code / Codex session in spacesheep
     spacesheep memory status | uninstall   what is wired and synced; remove the hooks
-    spacesheep sessions install [--machine NAME] [--ssh HOST]   show every Claude Code / Codex session,
-                                           live, on spacesheep.dev/sessions (also installs memory sync)
-    spacesheep sessions status | uninstall | backfill
 
   deploy options
     --space <uuid|url>       update this space (else the .spacesheep.json in the folder, else create)
