@@ -75,7 +75,7 @@ function parse(argv) {
   }
   return opts;
 }
-const FLAGS = new Set(["--no-manifest", "--claude", "--codex", "--no-memory"]);
+const FLAGS = new Set(["--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
 const log = (...a) => { if (!process.env.SPACESHEEP_QUIET) console.error(...a); };
@@ -181,9 +181,9 @@ const commands = {
     if (sub === "install") return ses.install(opts, log, process.argv.slice(3));
     if (sub === "uninstall") return ses.uninstall(opts, log);
     if (sub === "status") return ses.status(opts, out);
-    if (sub === "backfill") return ses.backfill(log, undefined, { claude: !opts.codex || !!opts.claude, codex: !opts.claude || !!opts.codex });
+    if (sub === "backfill") { const all = !opts.claude && !opts.codex && !opts.antigravity; return ses.backfill(log, undefined, { claude: all || !!opts.claude, codex: all || !!opts.codex, antigravity: all || !!opts.antigravity }); }
     if (sub === "forget") return ses.forget(opts, log);
-    if (sub === "help") return log(`  spacesheep sessions install [--machine NAME] [--ssh HOST] [--config-dir DIR ...]\n  spacesheep sessions status | uninstall | backfill [--claude|--codex] | forget --source codex [--machine NAME]`);
+    if (sub === "help") return log(`  spacesheep sessions install [--machine NAME] [--ssh HOST] [--config-dir DIR ...] [--claude] [--codex] [--antigravity]\n  spacesheep sessions status | uninstall | backfill [--claude|--codex|--antigravity] | forget --source codex [--machine NAME]`);
     throw new Error("usage: spacesheep sessions install [--machine NAME] [--ssh HOST] [--no-memory] | status | uninstall | backfill | forget --source codex");
   },
 };

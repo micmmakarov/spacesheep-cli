@@ -93,6 +93,31 @@ still get through; `spacesheep memory uninstall` stops sending anything.
 Codex takes one `notify` command. If yours is already set, `install` leaves it
 alone and prints the line to add to a wrapper script.
 
+## See every session live: Claude Code, Codex and Antigravity
+
+`spacesheep sessions install` hooks every coding agent on the machine into
+[spacesheep.dev/sessions](https://spacesheep.dev/sessions): which sessions are
+working, which need you, which are idle, on which machine.
+
+```bash
+npm install -g github:micmmakarov/spacesheep-cli
+spacesheep sessions install --machine "My laptop"   # --claude, --codex or --antigravity for one of them
+spacesheep sessions status
+```
+
+| Agent | Where the hooks go | What reports |
+|---|---|---|
+| Claude Code | `settings.json` in every Claude Code config dir (`~/.claude`, `$CLAUDE_CONFIG_DIR`, `~/.claude-*`) | prompt, tool heartbeat, needs-you notifications, stop, end; turns sync to memory |
+| Codex | `notify` in `~/.codex/config.toml` | each finished turn; turns sync to memory |
+| Antigravity (app, IDE and `agy` CLI) | a `spacesheep-sessions` entry in `~/.gemini/config/hooks.json` | `PreInvocation` → working, `PostToolUse` → heartbeat, `Stop` → idle; the first ask becomes the title. No conversation text is sent. |
+
+Antigravity is hooked automatically when `~/.gemini` has its config or data dirs.
+Its hooks answer `{}` on stdout, as Antigravity requires, and read `conversationId`
+from its camelCase stdin. It loads `hooks.json` when a conversation starts, so a
+conversation that was already open reports after a restart. The install also
+backfills the last 30 days from each agent's own session files. `spacesheep
+sessions uninstall` removes only the entries it added.
+
 ## Commands
 
 | Command | What it does |
@@ -106,6 +131,7 @@ alone and prints the line to add to a wrapper script.
 | `spacesheep read <space> [path] [-o dir]` | Print a space's files, or save them to a folder |
 | `spacesheep versions <space>` | Version history |
 | `spacesheep share <space> --visibility v --email a@b.c` | Change who can view, invite people |
+| `spacesheep sessions install` | Hook Claude Code, Codex and Antigravity into spacesheep.dev/sessions. Options: `--machine`, `--ssh`, `--claude`, `--codex`, `--antigravity`, `--no-memory`, `--config-dir` |
 | `spacesheep update` | Install the newest version globally |
 
 `<space>` is a UUID or a `spacesheep.dev/@user/slug` URL.
