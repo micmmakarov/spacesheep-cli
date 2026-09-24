@@ -6,6 +6,10 @@ if (process.argv[2] === "memory" && process.argv[3] === "sync") {
   require("../lib/memory").sync(process.argv.slice(4));
   return;
 }
+if (process.argv[2] === "sessions" && process.argv[3] === "ping") {
+  require("../lib/sessions").ping(process.argv.slice(4));
+  return;
+}
 const fs = require("fs");
 const path = require("path");
 const pkg = require("../package.json");
@@ -33,6 +37,9 @@ const HELP = `
     spacesheep update                      install the newest version globally
     spacesheep memory install [--claude] [--codex]   remember every Claude Code / Codex session in spacesheep
     spacesheep memory status | uninstall   what is wired and synced; remove the hooks
+    spacesheep sessions install [--machine NAME] [--ssh HOST]   show every Claude Code / Codex session,
+                                           live, on spacesheep.dev/sessions (also installs memory sync)
+    spacesheep sessions status | uninstall | backfill
 
   deploy options
     --space <uuid|url>       update this space (else the .spacesheep.json in the folder, else create)
@@ -169,6 +176,15 @@ const commands = {
     if (sub === "uninstall") return mem.uninstall(opts, log);
     if (sub === "status") return mem.status(opts, out);
     throw new Error("usage: spacesheep memory install [--claude] [--codex] | uninstall | status");
+  },
+  async sessions(opts) {
+    const ses = require("../lib/sessions");
+    const sub = opts._[0];
+    if (sub === "install") return ses.install(opts, log, process.argv.slice(3));
+    if (sub === "uninstall") return ses.uninstall(opts, log);
+    if (sub === "status") return ses.status(opts, out);
+    if (sub === "backfill") return ses.backfill(log);
+    throw new Error("usage: spacesheep sessions install [--machine NAME] [--ssh HOST] | status | uninstall | backfill");
   },
 };
 
