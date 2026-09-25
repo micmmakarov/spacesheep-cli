@@ -198,7 +198,7 @@ const commands = {
     const sub = opts._[0];
     if (sub === "install") return ses.install(opts, log, process.argv.slice(3));
     if (sub === "uninstall") return ses.uninstall(opts, log);
-    if (sub === "status") return ses.status(opts, out);
+    if (sub === "status") return ses.status(opts, out, cfg.resolveKey() ? (name, args) => client().call(name, args) : null);
     if (sub === "backfill") { const all = !opts.claude && !opts.codex && !opts.antigravity; return ses.backfill(log, undefined, { claude: all || !!opts.claude, codex: all || !!opts.codex, antigravity: all || !!opts.antigravity }); }
     if (sub === "forget") return ses.forget(opts, log);
     if (sub === "help") return log(`  spacesheep sessions list [--source SOURCE] [--state STATE] [--machine NAME] [--since MS] [--offset N] [--limit N]\n  spacesheep sessions get <id> --source SOURCE [--limit N]\n  spacesheep sessions install [--machine NAME] [--ssh HOST] [--config-dir DIR ...] [--claude] [--codex] [--antigravity]\n  spacesheep sessions status | uninstall | backfill [--claude|--codex|--antigravity] | forget --source codex [--machine NAME]`);
