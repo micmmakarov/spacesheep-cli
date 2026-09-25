@@ -118,6 +118,16 @@ conversation that was already open reports after a restart. The install also
 backfills the last 30 days from each agent's own session files. `spacesheep
 sessions uninstall` removes only the entries it added.
 
+**Titles and links.** A Claude Code row is titled, best first, by a name you gave
+the session (`/rename`), then Claude Code's own title, then your first prompt, cut
+at 50 characters the way the Claude Code app cuts it. Folder handles like
+`sutro-problems-6a` are never titles. A Remote Control session opens on claude.ai
+from its row; the link is read from Claude Code's session file, found through the
+process that ran the hook, or from the transcript, and it is remembered after the
+session exits (`~/.config/spacesheep/sessions/facts/`). A session started without
+Remote Control has no claude.ai link. `spacesheep sessions status` also shows what
+the board holds for this machine: sessions, links and accounts.
+
 ## Send feedback and inspect sessions
 
 CLI 1.7.0 adds commands for the remote MCP feedback and session tools.
@@ -179,7 +189,7 @@ observations cannot be reconstructed; named observations are retained for 14 day
 | `spacesheep feedback <message> --client-id <id>` | Submit feedback; optional `--category`, repeated `--tag`, `--metadata` JSON; returns a JSON receipt |
 | `spacesheep sessions list` | Query your tracked sessions with filters and pagination; JSON output |
 | `spacesheep sessions get <id> --source <source>` | Inspect recent retained session history; optional `--limit`; JSON output |
-| `spacesheep sessions status` | Check local reporting hooks (not the remote session list) |
+| `spacesheep sessions status` | Check local reporting hooks, and how many of this machine's sessions the board has, with links and accounts |
 | `spacesheep update` | Install the newest version globally |
 
 `<space>` is a UUID or a `spacesheep.dev/@user/slug` URL.
