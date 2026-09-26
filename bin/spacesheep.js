@@ -36,6 +36,12 @@ const HELP = `
     spacesheep share <space> [--visibility v] [--email a@b.c ...]
     spacesheep feedback <message> --client-id <id> [--category bug] [--tag deploy ...]
                                            send feedback to the team; reuse the ID on retries
+    spacesheep talk status | on | off      "Talk to your sessions": message a session from its page (Pro/Team)
+    spacesheep talk listen [--session ID] [--once]
+                                           wait for those messages here, one JSON line each
+                                           (--session defaults to $CLAUDE_CODE_SESSION_ID)
+    spacesheep talk reply <text> [--session ID]
+                                           answer in the page's Session tab
     spacesheep sessions list [--state done] [--source codex] [--machine NAME]
                                            inspect tracked sessions (JSON); --since ms --offset N --limit N
     spacesheep sessions get <id> --source <source> [--limit N]
@@ -84,7 +90,7 @@ function parse(argv) {
   }
   return opts;
 }
-const FLAGS = new Set(["--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain"]);
+const FLAGS = new Set(["--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
 const log = (...a) => { if (!process.env.SPACESHEEP_QUIET) console.error(...a); };
@@ -178,6 +184,9 @@ const commands = {
   async feedback(opts) {
     const args = require("../lib/inspection").feedbackArgs(opts);
     out(await client().call("submit_feedback", args));
+  },
+  async talk(opts) {
+    return require("../lib/talk").run(opts, (name, args) => client().call(name, args), out, log);
   },
   async update() { return selfUpdate(log); },
   async memory(opts) {
