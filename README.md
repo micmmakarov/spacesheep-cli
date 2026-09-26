@@ -90,8 +90,21 @@ passwords in URLs, `Bearer` headers, `NAME=value` where the name is a secret's
 "password is …". It is pattern-based, so an unlabelled secret in plain prose can
 still get through; `spacesheep memory uninstall` stops sending anything.
 
-Codex takes one `notify` command. If yours is already set, `install` leaves it
-alone and prints the line to add to a wrapper script.
+Codex takes one `notify` command, and reads it only at the top of
+`~/.codex/config.toml`, before the first `[table]` (Codex appends a `[projects."…"]`
+table for every folder it trusts, so a line added at the end of the file is never
+read). `install` writes the line there, moves one it finds inside a table, and
+rewrites it when the node or the script moved; `memory status` calls a line inside a
+table *misplaced*, not installed. If another tool already owns `notify` (Codex
+Computer Use, for one), `install` leaves it alone and says Codex was skipped;
+`--codex-chain` points it at a small script, `~/.config/spacesheep/bin/codex-notify`,
+that runs spacesheep's turn sync and then the command you had, and `uninstall` puts
+the original back.
+
+`spacesheep update` upgrades the copy that is running, into its own npm prefix.
+If npm's global prefix is somewhere else, or the hooks run a copy inside Homebrew's
+versioned `Cellar/node/<version>/` folder (which `brew upgrade node` deletes),
+`install` and `status` say so.
 
 ## See every session live: Claude Code, Codex and Antigravity
 
@@ -185,7 +198,7 @@ observations cannot be reconstructed; named observations are retained for 14 day
 | `spacesheep read <space> [path] [-o dir]` | Print a space's files, or save them to a folder |
 | `spacesheep versions <space>` | Version history |
 | `spacesheep share <space> --visibility v --email a@b.c` | Change who can view, invite people |
-| `spacesheep sessions install` | Hook Claude Code, Codex and Antigravity into spacesheep.dev/sessions. Options: `--machine`, `--ssh`, `--claude`, `--codex`, `--antigravity`, `--no-memory`, `--config-dir` |
+| `spacesheep sessions install` | Hook Claude Code, Codex and Antigravity into spacesheep.dev/sessions. Options: `--machine`, `--ssh`, `--claude`, `--codex`, `--antigravity`, `--no-memory`, `--config-dir`, `--codex-chain` |
 | `spacesheep feedback <message> --client-id <id>` | Submit feedback; optional `--category`, repeated `--tag`, `--metadata` JSON; returns a JSON receipt |
 | `spacesheep sessions list` | Query your tracked sessions with filters and pagination; JSON output |
 | `spacesheep sessions get <id> --source <source>` | Inspect recent retained session history; optional `--limit`; JSON output |
