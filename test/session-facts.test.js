@@ -157,3 +157,26 @@ describe("running count", () => {
     for (const [exe, cmd, want] of cases) assert.strictEqual(ses.isClaudeCode(exe, cmd), want, exe);
   });
 });
+
+describe("publish pings and Antigravity links (1.9.0)", () => {
+  it("isPublishTool names a spacesheep deploy or edit under any server name", () => {
+    assert.equal(ses.isPublishTool("mcp__spacesheep__deploy"), true);
+    assert.equal(ses.isPublishTool("mcp__plugin_spacesheep_spacesheep__edit"), true);
+    assert.equal(ses.isPublishTool("mcp__spacesheep__read_space"), false);
+    assert.equal(ses.isPublishTool("mcp__github__deploy"), false);
+    assert.equal(ses.isPublishTool("Bash"), false);
+    assert.equal(ses.isPublishTool(undefined), false);
+  });
+  it("antigravityRemoteUrl reads the installation id from the transcript's data dir", () => {
+    const data = path.join(HOME, ".gemini", "antigravity");
+    const t = path.join(data, "brain", "5c5e41a5-7ce9-4789-b200-28567b586871", ".system_generated", "logs", "transcript.jsonl");
+    fs.mkdirSync(path.dirname(t), { recursive: true });
+    fs.writeFileSync(t, line({ type: "USER_INPUT", content: "<USER_REQUEST>hello there</USER_REQUEST>", created_at: new Date().toISOString() }));
+    assert.equal(ses.antigravityRemoteUrl(t), null);
+    fs.writeFileSync(path.join(data, "antigravity_state.pbtxt"), 'foo: 1\ninstallation_uuid: "afe9f7be-b9e9-4752-a604-7559963e8245"\n');
+    const url = "https://antigravity.google.com/r/afe9f7be-b9e9-4752-a604-7559963e8245-v2";
+    assert.equal(ses.antigravityRemoteUrl(t), url);
+    assert.equal(ses.antigravityFacts(t).url, url);
+    assert.equal(ses.antigravityFacts(t).title, "hello there");
+  });
+});
