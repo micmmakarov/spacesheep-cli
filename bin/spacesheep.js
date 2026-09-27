@@ -139,6 +139,8 @@ const commands = {
     log(`\n  ✓ ${r.is_update ? "Updated" : "Created"} ${r.url}`);
     for (const w of r.warnings || []) log(`  ! ${w}`);
     if (r.metadata_warning) log(`  ! ${r.metadata_warning.split(".")[0]}. Pass --emoji and --description.`);
+    const nudge = require("../lib/talk").deployNudge(r);
+    if (nudge) log("\n" + nudge);
     out(r.url);
     if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `url=${r.url}\nuuid=${r.uuid}\nsha=${r.sha}\n`);
   },
