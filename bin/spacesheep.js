@@ -109,8 +109,9 @@ const commands = {
     log(`\n  ✓ Signed in${username ? ` as @${username}` : ""}. Key saved to ${cfg.configPath()}\n`);
   },
   async connect(opts) {
-    const [parent, given] = opts._;
-    if (!parent || !parent.startsWith("ss_")) throw new Error("usage: spacesheep connect <ss_key> [name] — create the key at https://spacesheep.dev/settings/api-keys#create");
+    const parent = cfg.cleanKey(opts._[0]);
+    const given = opts._[1];
+    if (!parent || !parent.startsWith("ss_")) throw new Error("usage: spacesheep connect <ss_key> [name] — create the key at https://spacesheep.dev/settings/api-keys#create (or skip connect and set SPACESHEEP_KEY=ss_… in the environment)");
     const name = (given || os.hostname().split(".")[0] || "machine").slice(0, 60);
     const { key, username } = await connectWithKey(cfg.appOrigin(), parent, name, log);
     cfg.writeConfig({
@@ -119,7 +120,7 @@ const commands = {
       appOrigin: process.env.SPACESHEEP_APP_ORIGIN || undefined,
     });
     // Prove the stored key works against the MCP server before saying so.
-    await client().call("list_spaces").catch((e) => { if (e.code === "EAUTH") throw e; });
+    await client().call("list_spaces").catch((e) => { if (e.code === "EAUTH" || e.code === "ENET") throw e; });
     log(`\n  ✓ Connected${username ? ` as @${username}` : ""} on "${name}". Key saved to ${cfg.configPath()}\n`);
   },
   async logout() {
