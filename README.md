@@ -138,7 +138,11 @@ at 50 characters the way the Claude Code app cuts it. Folder handles like
 from its row; the link is read from Claude Code's session file, found through the
 process that ran the hook, or from the transcript, and it is remembered after the
 session exits (`~/.config/spacesheep/sessions/facts/`). A session started without
-Remote Control has no claude.ai link. `spacesheep sessions status` also shows what
+Remote Control has no claude.ai link. An Antigravity row opens its own conversation
+in Antigravity's web remote (`antigravity.google.com/r/<install>-v2?p=c/<conversation>?section=<project>`);
+the project is the one in `~/.gemini/config/projects/` whose folder holds the
+session's workspace. With no such project, or for a backfilled row until its next
+hook fires, the link opens the remote's home. `spacesheep sessions status` also shows what
 the board holds for this machine: sessions, links and accounts.
 
 ## Send feedback and inspect sessions
