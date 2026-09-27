@@ -145,6 +145,28 @@ session's workspace. With no such project, or for a backfilled row until its nex
 hook fires, the link opens the remote's home. `spacesheep sessions status` also shows what
 the board holds for this machine: sessions, links and accounts.
 
+## Talk to a session from its page
+
+On Pro and Team, a space's **Session** tab lets you message the coding session that
+published it. The session only hears you while it runs a listener, which it has to
+start itself:
+
+```bash
+spacesheep talk on               # your account's switch, and this machine's opt-in
+spacesheep talk listen           # one JSON line per message (run it under Monitor)
+spacesheep talk reply "done"     # answer in the Session tab
+```
+
+Sessions are told they can listen in two places. After `spacesheep deploy`, when
+Talk is on and the session isn't listening yet. And, with `spacesheep sessions
+install`, at the start of every Claude Code session on a machine that ran `talk on`.
+Both notes are fixed text written by the CLI. The server's words never reach the
+agent's context: the deploy note reads only whether the server set `talk`, and the
+session id comes from the local environment. Neither note starts a listener; the
+agent decides, under its own permission rules. Turning Talk on from the website
+doesn't enable the start-of-session note on any machine, so a stolen web session
+alone can't open a channel into every session you run.
+
 ## Send feedback and inspect sessions
 
 CLI 1.7.0 adds commands for the remote MCP feedback and session tools.
