@@ -147,6 +147,13 @@ session's workspace. With no such project, or for a backfilled row until its nex
 hook fires, the link opens the remote's home. `spacesheep sessions status` also shows what
 the board holds for this machine: sessions, links and accounts.
 
+**Test runs stay off the board.** From 1.17.0 each Claude Code ping carries whether a
+person attended the session, as Claude Code itself tells its hooks
+(`CLAUDE_CODE_SESSION_ATTENDED`). A `claude -p` another session launched, say to check
+that the hooks fire, reports "no", and when it was over within a minute on one turn the
+board files it under **Hidden** instead of listing it. Anything else can be hidden by
+hand from its row, and comes back once you use it again.
+
 ## Talk to a session from its page
 
 On Pro and Team, a space's **Session** tab lets you message the coding session that
