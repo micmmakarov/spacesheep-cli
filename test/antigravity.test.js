@@ -11,13 +11,18 @@ const ses = require("../lib/sessions");
 
 const BIN = path.join(__dirname, "..", "bin", "spacesheep.js");
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "ss-ag-"));
+// The hook hands its job file to a detached child that reads and deletes it; a test
+// that reads the file raced that child and lost now and then. Preloaded into every
+// node the hook starts, this ends the child before it touches the file.
+const NO_CHILD = path.join(tmp(), "no-child.js");
+fs.writeFileSync(NO_CHILD, 'if (process.argv.includes("--child")) process.exit(0);\n');
 const ID = "5c5e41a5-7ce9-4789-b200-28567b586871";
 
 function hook(event, stdin) {
   const home = tmp();
   const r = spawnSync(process.execPath, [BIN, "sessions", "ping", event, "--antigravity"], {
     input: typeof stdin === "string" ? stdin : JSON.stringify(stdin),
-    env: { ...process.env, HOME: home, SPACESHEEP_CONFIG_DIR: path.join(home, "cfg"), SPACESHEEP_KEY: "" },
+    env: { ...process.env, HOME: home, SPACESHEEP_CONFIG_DIR: path.join(home, "cfg"), SPACESHEEP_KEY: "", NODE_OPTIONS: `--require ${NO_CHILD}` },
     encoding: "utf8",
   });
   const dir = path.join(home, "cfg", "sessions", "jobs");
