@@ -34,8 +34,9 @@ const HELP = `
     spacesheep read <space> [path] [-o dir]  print a space's files, or write them to a folder
     spacesheep versions <space>            version history
     spacesheep share <space> [--visibility v] [--email a@b.c ...]
-    spacesheep feedback <message> --client-id <id> [--category bug] [--tag deploy ...]
-                                           send feedback to the team; reuse the ID on retries
+    spacesheep feedback <message> --client-id <id> [--category bug] [--tag deploy ...] [--attach file]
+                                           send feedback to the team; reuse the ID on retries.
+                                           --attach sends a text file (a log, a transcript tail) beside it
     spacesheep talk status | on | off      "Talk to your sessions": message a session from its page (Pro/Team)
     spacesheep talk listen [--session ID] [--once]
                                            wait for those messages here, one JSON line each

@@ -59,8 +59,25 @@ test("invalid input fails locally, including zero, partial integers and oversize
   assert.throws(() => sessionArgs({ _: ["get", "id"] }));
   assert.deepEqual(sessionArgs({ _: ["list"], offset: "0", since: "0" }), { offset: 0, since: 0 });
   const opts = { _: ["hello"], clientId: "report-001" };
-  for (const extra of [{ clientId: "short" }, { metadata: "[]" }, { metadata: '{"x":{}}' }, { metadata: '{"x":1e999}' }, { _: ["x".repeat(4000)] }, { tags: [""] }])
+  for (const extra of [{ clientId: "short" }, { metadata: "[]" }, { metadata: '{"x":{}}' }, { metadata: '{"x":1e999}' }, { _: ["x".repeat(20001)] }, { tags: [""] }])
     assert.throws(() => feedbackArgs({ ...opts, ...extra }));
+  assert.equal(feedbackArgs({ ...opts, _: ["x".repeat(19000)] }).message.length, 19000);
+});
+test("--attach sends a text file beside the message, named for what it is", t => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ss-attach-"));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const log = path.join(tmp, "deploy-error.log");
+  fs.writeFileSync(log, "POST /deploy\n503 upstream\n");
+  const args = feedbackArgs({ _: ["Deploy 503"], clientId: "report-002", attach: log });
+  assert.deepEqual(args.attachment, { text: "POST /deploy\n503 upstream\n", filename: "deploy-error.log" });
+  const odd = path.join(tmp, "trace.json");
+  fs.writeFileSync(odd, "{}");
+  assert.equal(feedbackArgs({ _: ["Trace"], clientId: "report-003", attach: odd }).attachment.filename, "trace.json.txt");
+  const empty = path.join(tmp, "empty.txt"); fs.writeFileSync(empty, "  \n");
+  assert.throws(() => feedbackArgs({ _: ["x"], clientId: "report-004", attach: empty }), /empty/);
+  const big = path.join(tmp, "big.txt"); fs.writeFileSync(big, "y".repeat(100001));
+  assert.throws(() => feedbackArgs({ _: ["x"], clientId: "report-005", attach: big }), /limit is 100000/);
+  assert.throws(() => feedbackArgs({ _: ["x"], clientId: "report-006", attach: path.join(tmp, "missing.log") }), /cannot read/);
 });
 test("hook child posts a named observation without arguments or output", async t => {
   let posted;
