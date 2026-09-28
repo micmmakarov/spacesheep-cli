@@ -13,7 +13,9 @@ npx spacesheep deploy ./dist  # publish — prints the URL
 
 The second `deploy` in the same folder updates the same space (the id is kept in
 `.spacesheep.json`; commit it), and every deploy is a new version you can roll back
-to in the dashboard.
+to in the dashboard. If the folder now holds a different page (its `<title>` changed),
+`deploy` stops rather than replace the old one: pass `--space <url>` to update it
+anyway, or `--new` to publish the page as a new space. GitHub Actions skips that check.
 
 ## Deploy automatically from GitHub Actions
 
@@ -219,7 +221,7 @@ observations cannot be reconstructed; named observations are retained for 14 day
 | `spacesheep connect <ss_key> [name]` | Sign in with no browser. Mints this machine its own key, named after its hostname (or `name`), and stores that; the pasted key is never written to disk |
 | `spacesheep logout` | Forget the stored key |
 | `spacesheep whoami` | Who the current key belongs to |
-| `spacesheep deploy [dir\|file]` | Publish. Options: `--space`, `--title`, `--slug`, `--emoji`, `--description`, `--visibility`, `--org`, `-m <version name>`, `--json` |
+| `spacesheep deploy [dir\|file]` | Publish. Options: `--space`, `--new`, `--title`, `--slug`, `--emoji`, `--description`, `--visibility`, `--org`, `-m <version name>`, `--json`. A folder's `.spacesheep.json` pins it to one space; if `index.html`'s `<title>` no longer matches the page the pin last published, deploy stops and asks for `--space` (update it anyway) or `--new` (a new space). |
 | `spacesheep list` | Your spaces |
 | `spacesheep read <space> [path] [-o dir]` | Print a space's files, or save them to a folder |
 | `spacesheep versions <space>` | Version history |
