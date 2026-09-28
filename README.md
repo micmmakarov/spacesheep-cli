@@ -124,7 +124,7 @@ spacesheep sessions status
 |---|---|---|
 | Claude Code | `settings.json` in every Claude Code config dir (`~/.claude`, `$CLAUDE_CONFIG_DIR`, `~/.claude-*`) | prompt, tool heartbeat, needs-you notifications, stop, end; turns sync to memory |
 | Codex | `notify` in `~/.codex/config.toml` | each finished turn; turns sync to memory |
-| Antigravity (app, IDE and `agy` CLI) | a `spacesheep-sessions` entry in `~/.gemini/config/hooks.json` | `PreInvocation` → working, `PostToolUse` → heartbeat, `Stop` → idle; the first ask becomes the title. No conversation text is sent. |
+| Antigravity (app, IDE and `agy` CLI) | a `spacesheep-sessions` entry in `~/.gemini/config/hooks.json` | `PreInvocation` → working, `PostToolUse` → heartbeat, `Stop` → idle; the first ask becomes the title. From 1.16.0 its `Stop` also runs `memory sync --source antigravity`, which sends each finished turn (the words inside `<USER_REQUEST>` and the model's `PLANNER_RESPONSE`) to your memory — unless you installed with `--no-memory`. |
 
 Antigravity is hooked automatically when `~/.gemini` has its config or data dirs.
 Its hooks answer `{}` on stdout, as Antigravity requires, and read `conversationId`
