@@ -13,10 +13,13 @@ const ses = require("../lib/sessions");
 
 const BIN = path.join(__dirname, "..", "bin", "spacesheep.js");
 const ID = "7d1e2f30-1111-4222-8333-944455566677";
+// Ends the hook's detached child before it takes the job file (see antigravity.test.js).
+const NO_CHILD = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ss-att-")), "no-child.js");
+fs.writeFileSync(NO_CHILD, 'if (process.argv.includes("--child")) process.exit(0);\n');
 
 function hook(env) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "ss-att-"));
-  const base = { ...process.env, HOME: home, SPACESHEEP_CONFIG_DIR: path.join(home, "cfg"), SPACESHEEP_KEY: "" };
+  const base = { ...process.env, HOME: home, SPACESHEEP_CONFIG_DIR: path.join(home, "cfg"), SPACESHEEP_KEY: "", NODE_OPTIONS: `--require ${NO_CHILD}` };
   delete base.CLAUDE_CODE_SESSION_ATTENDED;
   spawnSync(process.execPath, [BIN, "sessions", "ping", "stop"], {
     input: JSON.stringify({ session_id: ID, cwd: home }), env: { ...base, ...env }, encoding: "utf8",
@@ -33,13 +36,8 @@ describe("attended", () => {
     assert.strictEqual(ses.attendedFromEnv({}), undefined);
   });
   it("rides the hook's job, and is left out when Claude Code doesn't say", () => {
-    const off = hook({ CLAUDE_CODE_SESSION_ATTENDED: "0" });
-    const on = hook({ CLAUDE_CODE_SESSION_ATTENDED: "1" });
-    const unsaid = hook({});
-    // The detached child may already have taken a job; when one is left, it says so.
-    if (off.length) assert.strictEqual(off[0].attended, false);
-    if (on.length) assert.strictEqual(on[0].attended, true);
-    if (unsaid.length) assert.ok(!("attended" in unsaid[0]));
-    assert.ok(off.length + on.length + unsaid.length > 0, "no job was written");
+    assert.strictEqual(hook({ CLAUDE_CODE_SESSION_ATTENDED: "0" })[0].attended, false);
+    assert.strictEqual(hook({ CLAUDE_CODE_SESSION_ATTENDED: "1" })[0].attended, true);
+    assert.ok(!("attended" in hook({})[0]));
   });
 });
