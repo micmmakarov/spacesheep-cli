@@ -55,6 +55,8 @@ const HELP = `
 
   deploy options
     --space <uuid|url>       update this space (else the .spacesheep.json in the folder, else create)
+    --new                    publish as a new space, whatever the folder's .spacesheep.json names
+                             (a pinned folder whose index.html has a different <title> refuses without one of these)
     --title, --slug, --emoji, --description   metadata for a new space (kept on update unless passed)
     --visibility <public|signed_in|members|private>   new spaces only; default private
     --org <slug>             publish under an org
@@ -91,7 +93,7 @@ function parse(argv) {
   }
   return opts;
 }
-const FLAGS = new Set(["--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once"]);
+const FLAGS = new Set(["--new", "--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
 const log = (...a) => { if (!process.env.SPACESHEEP_QUIET) console.error(...a); };
