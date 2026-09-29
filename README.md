@@ -7,9 +7,16 @@ Spacesheep hosts single-file web pages (dashboards, reports, docs, small apps) a
 built in. This CLI deploys a folder or an HTML file there in one command.
 
 ```bash
-npx spacesheep login          # sign in through the browser once
 npx spacesheep deploy ./dist  # publish — prints the URL
 ```
+
+The first run on a machine signs it in: it prints a link and a code, you approve
+them in any browser (your phone works), and the key is stored in
+`~/.config/spacesheep`. From a terminal the command waits for the approval and
+carries on. Run by an agent, with no terminal attached, it hands back the link to
+pass on and exits; the next run picks up the approval and publishes. There is
+nothing to type in either case. `npx spacesheep login` does the same on its own.
+In CI, set `SPACESHEEP_KEY` instead (below).
 
 The second `deploy` in the same folder updates the same space (the id is kept in
 `.spacesheep.json`; commit it), and every deploy is a new version you can roll back

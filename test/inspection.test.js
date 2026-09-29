@@ -20,6 +20,11 @@ test("commands use authenticated MCP and preserve filters, receipts, pagination 
   const calls = [];
   let reject = false;
   const server = http.createServer(async (req, res) => {
+    // With no key, a command starts a sign-in (the device flow) before it fails.
+    if (req.url === "/cli/start") {
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ user_code: "ABCD-EFGH", device_code: "d", authorize_url: "https://spacesheep.dev/cli?code=ABCD-EFGH", expires_in: 600, interval: 2 }));
+    }
     assert.equal(req.headers.authorization, "Bearer ss_test_only");
     let input = ""; for await (const part of req) input += part;
     const body = JSON.parse(input);
@@ -51,7 +56,7 @@ test("commands use authenticated MCP and preserve filters, receipts, pagination 
   assert.deepEqual(calls[0], { name: "submit_feedback", arguments: { message: "Deploy failed", client_id: "report-001", category: "bug", tags: ["deploy", "cli"], metadata: { status: 503 } } });
   reject = true;
   r = await cli(args, env); assert.equal(r.code, 1); assert.match(r.stderr, /write access required/);
-  r = await cli(["sessions", "list"], { ...env, SPACESHEEP_KEY: "" }); assert.equal(r.code, 3);
+  r = await cli(["sessions", "list"], { ...env, SPACESHEEP_KEY: "", SPACESHEEP_NO_BROWSER: "1" }); assert.equal(r.code, 3);
 });
 test("invalid input fails locally, including zero, partial integers and oversized context", () => {
   for (const opts of [{ limit: "0" }, { offset: "-1" }, { since: "123ms" }, { state: "running" }, { limit: "101" }])

@@ -16,7 +16,7 @@ const pkg = require("../package.json");
 const cfg = require("../lib/config");
 const { McpClient } = require("../lib/mcp");
 const os = require("os");
-const { deviceLogin, connectWithKey } = require("../lib/login");
+const { deviceLogin, startLogin, livePending, waitForLogin, openBrowser, connectWithKey } = require("../lib/login");
 const { deploy } = require("../lib/deploy");
 const { updateNotice, selfUpdate } = require("../lib/update");
 
@@ -24,7 +24,9 @@ const HELP = `
   spacesheep ${pkg.version} — publish web pages to spacesheep.dev from a terminal or CI
 
   Usage
-    spacesheep login                       sign in through the browser (stores a key in ~/.config/spacesheep)
+    spacesheep login                       sign in: prints a link to approve on any device (a phone works) and
+                                           stores a key in ~/.config/spacesheep. Nothing to type here; any
+                                           command that needs the key starts this by itself
     spacesheep connect <ss_key> [name]     sign in with no browser: mints this machine its own key, named
                                            after its hostname (or <name>); the pasted key is never stored
     spacesheep logout                      forget the stored key
@@ -67,6 +69,7 @@ const HELP = `
     SPACESHEEP_KEY           an API key (spacesheep.dev/settings/api-keys) — what CI uses instead of login
     SPACESHEEP_APP_ORIGIN    the app origin for account calls such as connect (default ${cfg.DEFAULT_APP_ORIGIN})
     SPACESHEEP_ORIGIN        MCP server origin (default ${cfg.DEFAULT_ORIGIN})
+    SPACESHEEP_NO_BROWSER    never open a browser for a sign-in; print the link only
 
   In GitHub Actions:
     - uses: micmmakarov/spacesheep-cli@v1
@@ -101,15 +104,106 @@ const out = (v) => console.log(typeof v === "string" ? v : JSON.stringify(v, nul
 
 function client() {
   const k = cfg.resolveKey();
-  if (!k) { const e = new Error("not signed in — run `spacesheep login` (or set SPACESHEEP_KEY)"); e.code = "EAUTH"; throw e; }
+  if (!k) { const e = new Error(NOT_SIGNED_IN); e.code = "EAUTH"; throw e; }
   return new McpClient(cfg.origin(), k.key);
 }
 
+// "Run `spacesheep login`" once read to an agent as a job for the person: it asked
+// them to type `! npx spacesheep login`, then to say when they had approved
+// (2026-09-29). The login asks nothing of the terminal, so whoever reads this runs it.
+const NOT_SIGNED_IN = "this machine isn't signed in to spacesheep yet. Run `spacesheep login` yourself, an agent too: it asks nothing here, prints a link for the person to approve on any device, and exits once they do. Or set SPACESHEEP_KEY.";
+
+// How long a run with no terminal (an agent's shell) waits on a sign-in it already
+// handed out: under the two minutes an agent's tool call usually gets, so the run
+// ends with words instead of being killed. The next run keeps waiting.
+const AGENT_WAIT_MS = 90 * 1000;
+
+function saveLogin({ key, username }) {
+  const c = cfg.readConfig();
+  delete c.pending_login;
+  cfg.writeConfig({ ...c, key, username, origin: process.env.SPACESHEEP_ORIGIN || undefined });
+}
+function dropPending() {
+  const c = cfg.readConfig();
+  if (c.pending_login) { delete c.pending_login; cfg.writeConfig(c); }
+}
+const minutesLeft = (p) => Math.max(1, Math.round((p.expires_at - Date.now()) / 60000));
+
+// A command that needs the key, on a machine with none, signs the machine in rather
+// than telling someone to. A person at a terminal approves and the command carries
+// on. An agent's shell has nobody watching it, so the first run hands back the link
+// to pass on, and the next run picks up the approval — the same code, saved as
+// `pending_login`, so the link the person was given is the one that works. CI has
+// nobody to approve anything and keeps the plain answer.
+async function ensureSignedIn(retried = false) {
+  if (cfg.resolveKey()) return;
+  if (process.env.CI || process.env.GITHUB_ACTIONS) {
+    throw Object.assign(new Error("not signed in — set SPACESHEEP_KEY to an API key from https://spacesheep.dev/settings/api-keys#create (nobody is here to approve a browser sign-in)"), { code: "EAUTH" });
+  }
+  const origin = cfg.origin();
+  const resumed = livePending(cfg.readConfig().pending_login, origin);
+  let p = resumed;
+  if (!p) {
+    try {
+      p = await startLogin(origin);
+    } catch (e) {
+      // Still "not signed in" (exit 3), with the reason the sign-in didn't start.
+      throw Object.assign(new Error(`this machine isn't signed in to spacesheep yet, and a sign-in couldn't be started: ${e.message}. Run \`spacesheep login\` to try again, or set SPACESHEEP_KEY.`), { code: "EAUTH" });
+    }
+    cfg.writeConfig({ ...cfg.readConfig(), pending_login: p });
+  }
+  const person = process.stdin.isTTY && process.stderr.isTTY;
+  let got = null;
+  try {
+    if (person) {
+      log(`  This machine isn't signed in to spacesheep yet. Signing it in first.`);
+      got = await deviceLogin(origin, log, p, !resumed);
+    } else if (resumed) {
+      log(`  Waiting for the sign-in to be approved (code ${p.user_code}, ${minutesLeft(p)} min left)…`);
+      got = await waitForLogin(p, Date.now() + AGENT_WAIT_MS, log);
+    } else {
+      openBrowser(p.authorize_url); // this machine's own browser, when it has one
+    }
+  } catch (e) {
+    if (e.code !== "ELOGIN") throw e;
+    dropPending();
+    if (cfg.resolveKey()) return; // another run took the approval (the key is handed out once)
+    if (/expired/.test(e.message) && !retried) return ensureSignedIn(true);
+    throw e;
+  }
+  if (got) {
+    saveLogin(got);
+    log(`  ✓ Signed in${got.username ? ` as @${got.username}` : ""}. Key saved to ${cfg.configPath()}`);
+    return;
+  }
+  const message = resumed
+    ? [`the sign-in hasn't been approved yet: ${p.authorize_url} (code ${p.user_code}, ${minutesLeft(p)} min left).`,
+       `    Run this same command again to keep waiting; it carries on once it's approved.`]
+    : [`this machine isn't signed in to spacesheep yet, so a sign-in has started.`,
+       `    Approve it at this link, on any device (a phone works): ${p.authorize_url}`,
+       `    The page shows the code ${p.user_code}; the link lasts ${minutesLeft(p)} minutes.`,
+       `    Then run this same command again: it waits for the approval and carries on.`,
+       `    An agent passes the link on and re-runs right away. There is nothing for the person to run.`];
+  throw Object.assign(new Error(message.join("\n")), { code: "EAUTH" });
+}
+
+// Commands that call the server with the key (sessions: only list and get).
+const NEEDS_KEY = new Set(["deploy", "list", "read", "versions", "share", "feedback", "talk"]);
+
 const commands = {
   async login() {
-    const { key, username } = await deviceLogin(cfg.origin(), log);
-    cfg.writeConfig({ ...cfg.readConfig(), key, username, origin: process.env.SPACESHEEP_ORIGIN || undefined });
-    log(`\n  ✓ Signed in${username ? ` as @${username}` : ""}. Key saved to ${cfg.configPath()}\n`);
+    // A sign-in another command already handed out is finished, not replaced: its
+    // link is the one someone may be holding.
+    const origin = cfg.origin();
+    let got;
+    try {
+      got = await deviceLogin(origin, log, livePending(cfg.readConfig().pending_login, origin));
+    } catch (e) {
+      if (e.code === "ELOGIN") dropPending();
+      throw e;
+    }
+    saveLogin(got);
+    log(`\n  ✓ Signed in${got.username ? ` as @${got.username}` : ""}. Key saved to ${cfg.configPath()}\n`);
   },
   async connect(opts) {
     const parent = cfg.cleanKey(opts._[0]);
@@ -127,12 +221,17 @@ const commands = {
     log(`\n  ✓ Connected${username ? ` as @${username}` : ""} on "${name}". Key saved to ${cfg.configPath()}\n`);
   },
   async logout() {
-    const c = cfg.readConfig(); delete c.key; delete c.username; delete c.machine; cfg.writeConfig(c);
+    const c = cfg.readConfig(); delete c.key; delete c.username; delete c.machine; delete c.pending_login; cfg.writeConfig(c);
     log(`  ✓ Signed out.`);
   },
   async whoami(opts) {
     const k = cfg.resolveKey();
-    if (!k) throw Object.assign(new Error("not signed in"), { code: "EAUTH" });
+    if (!k) {
+      const p = livePending(cfg.readConfig().pending_login, cfg.origin());
+      throw Object.assign(new Error(p
+        ? `not signed in yet: a sign-in is waiting for approval at ${p.authorize_url} (code ${p.user_code}, ${minutesLeft(p)} min left)`
+        : NOT_SIGNED_IN), { code: "EAUTH" });
+    }
     const c = cfg.readConfig();
     if (opts.json) return out({ username: c.username || null, key_prefix: k.key.slice(0, 8), source: k.source, machine: c.machine || null });
     out(k.source === "env" ? `key from SPACESHEEP_KEY (${k.key.slice(0, 8)}…)` : `@${c.username || "?"}${c.machine ? ` on "${c.machine}"` : ""} (${k.key.slice(0, 8)}…, ${cfg.configPath()})`);
@@ -231,6 +330,7 @@ const commands = {
     process.exit(cmd && !commands[cmd] ? 1 : 0);
   }
   try {
+    if (NEEDS_KEY.has(cmd) || (cmd === "sessions" && (opts._[0] === "list" || opts._[0] === "get"))) await ensureSignedIn();
     await commands[cmd](opts);
     if (!opts.json && cmd !== "update") { const n = await updateNotice(); if (n) log(`\n${n}`); }
   } catch (e) {
