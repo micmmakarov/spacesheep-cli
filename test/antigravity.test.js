@@ -42,7 +42,9 @@ describe("ping --antigravity", () => {
   it("reads conversationId, the first workspace and the model", () => {
     const r = hook("stop", { conversationId: ID, workspacePaths: ["file:///Users/yv/git/my%20repo"], transcriptPath: "/t.jsonl", modelName: "gemini-3-pro" });
     assert.strictEqual(r.jobs.length, 1);
-    assert.deepStrictEqual(r.jobs[0], { source: "antigravity", event: "stop", session_id: ID, cwd: "/Users/yv/git/my repo", transcript: "/t.jsonl", model: "gemini-3-pro", workspaces: ["/Users/yv/git/my repo"] });
+    const { at, ...job } = r.jobs[0];
+    assert.ok(Number.isFinite(at) && Math.abs(Date.now() - at) < 10_000);
+    assert.deepStrictEqual(job, { source: "antigravity", event: "stop", session_id: ID, cwd: "/Users/yv/git/my repo", transcript: "/t.jsonl", model: "gemini-3-pro", workspaces: ["/Users/yv/git/my repo"] });
   });
 
   it("only the first model call of an execution is the ask; the rest are heartbeats", () => {
