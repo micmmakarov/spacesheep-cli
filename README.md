@@ -271,6 +271,13 @@ newer version exists; `spacesheep update` installs it. Set
 
 ## How it works
 
+Every deploy sends its path/size manifest to `stage_begin` before uploading, so
+server preflight can report file and text caps, root worker restrictions, and
+current upload headroom. Headroom is advisory, not a reservation; upload and
+publish checks still decide. A refused preflight uploads nothing and prints
+any server-provided retry wait. Large sites retain the existing staged-hash
+lookup, so retries upload only what is missing.
+
 The CLI is an ordinary [MCP](https://modelcontextprotocol.io) client of the same
 remote server that the Claude, ChatGPT and Gemini connectors use
 (`https://mcp.spacesheep.dev/mcp`). It has no dependencies and no server-side code

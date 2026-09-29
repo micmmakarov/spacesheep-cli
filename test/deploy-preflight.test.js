@@ -5,7 +5,7 @@ const http = require("http");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { stagedSha, preflightError, refusalError, stageAll, wantsPreflight } = require("../lib/deploy");
+const { stagedSha, preflightError, refusalError, stageAll, wantsStagingLookup } = require("../lib/deploy");
 
 test("the staged address matches the server's (sha256 of path NUL bytes NUL, 12 hex)", () => {
   // The same fixture the MCP worker's e2e stages and gets back from PUT /stage.
@@ -13,10 +13,10 @@ test("the staged address matches the server's (sha256 of path NUL bytes NUL, 12 
   assert.equal(stagedSha("index.html", Buffer.from(html)), "d63139cc0c94");
 });
 
-test("only a big site asks the server first", () => {
-  assert.equal(wantsPreflight([{ size: 10 }, { size: 10 }]), false);
-  assert.equal(wantsPreflight(Array.from({ length: 201 }, () => ({ size: 1 }))), true);
-  assert.equal(wantsPreflight([{ size: 60 * 1024 * 1024 }]), true);
+test("only a big site requests a staging reuse lookup", () => {
+  assert.equal(wantsStagingLookup([{ size: 10 }, { size: 10 }]), false);
+  assert.equal(wantsStagingLookup(Array.from({ length: 201 }, () => ({ size: 1 }))), true);
+  assert.equal(wantsStagingLookup([{ size: 60 * 1024 * 1024 }]), true);
 });
 
 test("a refused preflight names every wall and says nothing was uploaded", () => {
@@ -98,4 +98,80 @@ test("a failed upload says what is staged and that a rerun uploads only the rest
         /upload of f0\.txt failed: file too large\. 0 file\(s\) are staged .* uploads only the rest/,
       );
     });
+});
+
+const { deploy } = require('../lib/deploy');
+async function withDeployTree(fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-preflight-'));
+  fs.writeFileSync(path.join(dir, 'index.html'), '<h1>Test</h1>');
+  fs.writeFileSync(path.join(dir, 'worker.js'), 'self.onmessage = () => {};');
+  try { return await fn(dir); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
+
+test('an over-cap manifest makes ZERO upload calls and never calls deploy', async () => {
+  await withDeployTree(async (dir) => {
+    let puts = 0;
+    const originalFetch = global.fetch;
+    global.fetch = async () => { puts++; throw new Error('must not upload'); };
+    const calls = [];
+    try {
+      await assert.rejects(deploy({ call: async (name, args) => {
+        calls.push(name);
+        assert.equal(name, 'stage_begin');
+        assert.equal(args.files.length, 2);
+        assert.ok(args.files.every((f) => Number.isInteger(f.size)));
+        return { plan: 'team', limits: { max_files: 1 }, upload_url: 'https://stage.test',
+          preflight: { ok: false, problems: [{ error: 'too_many_files', message: 'Team plan holds at most 1' }] } };
+      } }, dir, { new: true }, () => {}), /too_many_files.*Team plan/);
+      assert.equal(puts, 0);
+      assert.deepEqual(calls, ['stage_begin']);
+      assert.equal(fs.existsSync(path.join(dir, '.spacesheep.json')), false);
+    } finally { global.fetch = originalFetch; }
+  });
+});
+
+test('a small root-worker or exhausted-headroom manifest also stops before any PUT', async () => {
+  for (const problem of [
+    { error: 'worker_restricted', message: 'worker.js requires team access', paths: ['worker.js'] },
+    { error: 'rate_limited', message: '0 uploads remain; reset at 2030-01-01', retry_after: 75 },
+  ]) await withDeployTree(async (dir) => {
+    const originalFetch = global.fetch;
+    let puts = 0;
+    global.fetch = async () => { puts++; throw new Error('must not upload'); };
+    try {
+      await assert.rejects(deploy({ call: async (name, args) => {
+        assert.equal(name, 'stage_begin');
+        assert.deepEqual(args.files.map((f) => f.path), ['index.html', 'worker.js']);
+        // Small-site reuse policy stays as on main: metadata only, no hash lookup.
+        assert.ok(args.files.every((f) => !f.sha));
+        return { upload_url: 'https://stage.test', preflight: { ok: false, problems: [problem] } };
+      } }, dir, { new: true }, () => {}), (e) => {
+        assert.match(e.message, /nothing was uploaded/);
+        assert.ok(e.message.includes(problem.error));
+        if (problem.retry_after) assert.match(e.message, /Retry in 75 seconds/);
+        return true;
+      });
+      assert.equal(puts, 0);
+    } finally { global.fetch = originalFetch; }
+  });
+});
+
+test('missing staging results explain that this command created no space', async () => {
+  for (const result of [null, undefined, {}]) await withDeployTree(async (dir) => {
+    await assert.rejects(deploy({ call: async () => result }, dir, { new: true }, () => {}),
+      /stage_begin failed: no upload_url.*no space was created/);
+  });
+});
+
+test('malformed deploy replies name the uncertainty and never write a pin', async () => {
+  for (const result of [null, undefined, {}, { uuid: 'u' }, { uuid: 7, url: 'https://x' }]) await withDeployTree(async (dir) => {
+    const originalFetch = global.fetch;
+    global.fetch = async () => new Response(JSON.stringify({ sha: 'aaaaaaaaaaaa' }));
+    try {
+      await assert.rejects(deploy({ call: async (name) => name === 'stage_begin'
+        ? { upload_url: 'https://stage.test' } : result }, dir, { new: true }, () => {}),
+      /unclear whether anything was published.*spacesheep list/);
+      assert.equal(fs.existsSync(path.join(dir, '.spacesheep.json')), false);
+    } finally { global.fetch = originalFetch; }
+  });
 });
