@@ -49,7 +49,7 @@ test("--new publishes a new space from a pinned folder and re-pins it to the new
     return { uuid: "new-id", url: "https://spacesheep.dev/@y/et-soc1-hot-line" };
   } };
   const realFetch = global.fetch;
-  global.fetch = async () => ({ ok: true, json: async () => ({ sha: "s1" }) });
+  global.fetch = async () => ({ ok: true, json: async () => ({ sha: "abcdef123456" }) });
   try { await deploy(client, dir, { new: true }, () => {}); } finally { global.fetch = realFetch; }
   const sent = calls.find(([n]) => n === "deploy")[1];
   assert.equal(sent.uuid, undefined);
@@ -71,7 +71,7 @@ test("in GitHub Actions a retitled site still deploys to its committed pin", asy
     return { uuid: "site-id", url: "https://spacesheep.dev/@y/docs" };
   } };
   const realFetch = global.fetch, prev = process.env.GITHUB_ACTIONS;
-  global.fetch = async () => ({ ok: true, json: async () => ({ sha: "s1" }) });
+  global.fetch = async () => ({ ok: true, json: async () => ({ sha: "abcdef123456" }) });
   process.env.GITHUB_ACTIONS = "true";
   try { await deploy(client, dir, {}, () => {}); } finally { global.fetch = realFetch; if (prev === undefined) delete process.env.GITHUB_ACTIONS; else process.env.GITHUB_ACTIONS = prev; }
   assert.equal(calls.find(([n]) => n === "deploy")[1].uuid, "site-id");
