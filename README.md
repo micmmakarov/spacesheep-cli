@@ -282,3 +282,19 @@ the staged hashes. Anything the tools can do, the CLI can do.
 Node 20 or newer.
 
 MIT.
+
+Deploy retries retain upload receipts in `.spacesheep.json` (`staged_files`, with
+path, server SHA, local content fingerprint and 24-hour expiry), even if publishing
+fails. The next deploy asks `stage_begin` which receipts still exist for the signed-in
+account and uploads only missing or changed files. Expired receipts are discarded;
+`--no-manifest` disables persistence. Checkpoints are saved every 25 uploads and
+when uploading finishes or fails, so an abruptly killed process may lose the last
+24 receipts (large-site preflight can still rediscover them by content address).
+No upload URL or credential is saved. Existing space pins and custom fields survive.
+
+The staged address is the first 12 lowercase hex characters of
+`SHA-256(UTF-8(path) + NUL + raw_file_bytes + NUL)`, including both NUL bytes and the
+relative deployment path. It is **not** a prefix of the hash of the bytes alone,
+SHA-1, a git blob hash, or the space's version SHA. Upload receipts refer to the
+original bytes; publish-time HTML transformations can give published files a
+different address.
