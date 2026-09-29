@@ -277,6 +277,14 @@ remote server that the Claude, ChatGPT and Gemini connectors use
 of its own: `deploy` stages each file with a PUT, then calls the `deploy` tool with
 the staged hashes. Anything the tools can do, the CLI can do.
 
+Deploy checks the file manifest with the server before uploading: account file
+and byte caps, the text-memory cap, root server-worker entries, and current
+upload-rate headroom. All reported problems appear together. Older servers fall
+back to the previous deploy flow with a note. A rate-limited upload prints the
+wait in minutes and seconds, stops queued uploads, and leaves retrying to you.
+If the deploy response cannot be parsed, the CLI reports unknown publication
+status: check `spacesheep list` before retrying so you don't create a duplicate.
+
 ## Requirements
 
 Node 20 or newer.
