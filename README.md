@@ -190,6 +190,23 @@ spacesheep sessions list --source codex --state done --since 1790208000000 --off
 spacesheep sessions get exact-id-from-list --source claude-code --limit 20 --json
 ```
 
+## Back up every session
+
+`sessions get` is a look at one session (turns capped at 4,000 characters, 100 at most).
+For a copy you keep, `sessions export` (1.20.0) writes every session, complete:
+
+```bash
+spacesheep sessions export -o ~/backup/spacesheep            # → ~/backup/spacesheep/sessions/
+spacesheep sessions export -o ~/backup/spacesheep --since $(( $(date +%s) * 1000 - 86400000 ))   # only the last day
+spacesheep sessions export --zip sessions.zip                 # keep the archive as one file
+```
+
+`sessions/index.md` lists every session; `sessions/<harness>/<start day>-<session id>.md`
+is one session — where it ran, how to resume it, what it was for, and its whole synced
+thread (a long one continues in `.part-2.md`, `.part-3.md`…). The same folder the daily
+Google Drive backup writes. File names are stable, so a `--since` export writes over the
+last one. It is the MCP tool `export_sessions`: a one-hour, read-only link to one zip.
+
 Feedback is sent to your own Spacesheep team thread and needs write access.
 Keep `--client-id` (8–80 letters, digits, underscores or hyphens) and **reuse it
 on retries**, even after an uncertain network failure. A receipt with
@@ -237,6 +254,7 @@ observations cannot be reconstructed; named observations are retained for 14 day
 | `spacesheep feedback <message> --client-id <id>` | Submit feedback; optional `--category`, repeated `--tag`, `--metadata` JSON; returns a JSON receipt |
 | `spacesheep sessions list` | Query your tracked sessions with filters and pagination; JSON output |
 | `spacesheep sessions get <id> --source <source>` | Inspect recent retained session history; optional `--limit`; JSON output |
+| `spacesheep sessions export [-o DIR]` | Every session, complete, into `DIR/sessions` (a backup). `--since MS` for only recent ones, `--zip FILE` to keep the archive, `--json` |
 | `spacesheep sessions status` | Check local reporting hooks, and how many of this machine's sessions the board has, with links and accounts |
 | `spacesheep update` | Install the newest version globally |
 
