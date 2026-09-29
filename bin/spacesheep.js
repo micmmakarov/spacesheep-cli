@@ -63,6 +63,11 @@ const HELP = `
     -m, --message <text>     version name shown in the space's history
     --json                   print the server's JSON result
 
+  Upload flow
+    stage_begin accepts optional title, space (UUID or @user/slug), and visibility (default private).
+    Declare intent, upload privately, then decide visibility at deploy. Staging publishes nothing;
+    /stage/<visibility>/<opaque> echoes intent only. The author can change visibility at deploy.
+
   Auth
     SPACESHEEP_KEY           an API key (spacesheep.dev/settings/api-keys) — what CI uses instead of login
     SPACESHEEP_APP_ORIGIN    the app origin for account calls such as connect (default ${cfg.DEFAULT_APP_ORIGIN})
