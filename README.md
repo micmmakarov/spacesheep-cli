@@ -162,7 +162,7 @@ start itself:
 
 ```bash
 spacesheep talk on               # your account's switch, and this machine's opt-in
-spacesheep talk listen           # one JSON line per message (run it under Monitor)
+spacesheep talk listen --once    # waits for the next message, prints it, exits (run it in the background)
 spacesheep talk reply "done"     # answer in the Session tab
 ```
 

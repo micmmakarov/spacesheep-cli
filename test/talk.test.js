@@ -66,6 +66,10 @@ test("start nudge: only on a machine that ran `talk on`, never after a compactio
   assert.equal(startNudge(ev, {}), null);
   assert.equal(startNudge(ev, { talk: "true" }), null);
   assert.ok(startNudge(ev, { talk: true }).includes(`--session ${SID}`));
+  // A Monitor expires every 30 minutes and each expiry is a turn the model narrates;
+  // the one-shot in a background shell wakes the session only for a message.
+  assert.ok(startNudge(ev, { talk: true }).includes(`--session ${SID} --once`));
+  assert.ok(!/Monitor in Claude Code|timeout_ms/.test(startNudge(ev, { talk: true })));
   assert.ok(startNudge({ ...ev, source: "resume" }, { talk: true }));
   assert.equal(startNudge({ ...ev, source: "compact" }, { talk: true }), null);
   assert.equal(startNudge({ session_id: "$(touch /tmp/x)", source: "startup" }, { talk: true }), null);
