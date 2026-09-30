@@ -43,6 +43,12 @@ const HELP = `
                                            (--session defaults to $CLAUDE_CODE_SESSION_ID)
     spacesheep talk reply <text> [--session ID]
                                            answer in the page's Session tab
+    spacesheep machine on [--folder DIR]... [--mode safe|auto] [--name NAME]
+                                           let spacesheep.dev reach this machine's Claude Code sessions:
+                                           pairs your passkey here, then a background listener runs your
+                                           messages (and new sessions) in those folders (Pro/Team)
+    spacesheep machine status | pair | off
+                                           check it; add another passkey; stop it and forget the passkeys
     spacesheep sessions list [--state done] [--source codex] [--machine NAME]
                                            inspect tracked sessions (JSON); --since ms --offset N --limit N
     spacesheep sessions get <id> --source <source> [--limit N]
@@ -89,6 +95,7 @@ function parse(argv) {
     else if (a === "--tag") opts.tags.push(take());
     else if (a === "--email") opts.emails.push(take());
     else if (a === "--config-dir") (opts.configDir = opts.configDir || []).push(take());
+    else if (a === "--folder") (opts.folder = opts.folder || []).push(take());
     else if (a.startsWith("--") && a.includes("=")) { const [k, v] = a.slice(2).split(/=(.*)/); opts[camel(k)] = v; }
     else if (FLAGS.has(a)) opts[camel(a.slice(2))] = true;
     else if (a.startsWith("--")) opts[camel(a.slice(2))] = take();
@@ -96,7 +103,7 @@ function parse(argv) {
   }
   return opts;
 }
-const FLAGS = new Set(["--new", "--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once"]);
+const FLAGS = new Set(["--new", "--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
 const log = (...a) => { if (!process.env.SPACESHEEP_QUIET) console.error(...a); };
@@ -196,6 +203,17 @@ const commands = {
   },
   async talk(opts) {
     return require("../lib/talk").run(opts, (name, args) => client().call(name, args), out, log);
+  },
+  async machine(opts) {
+    const mc = require("../lib/machine");
+    const sub = opts._[0];
+    // The listener runs until it is told to stop, then exits 0 so its service stays down.
+    if (sub === "run") process.exit(await mc.run(opts));
+    if (sub === "on") return mc.on(opts, log);
+    if (sub === "pair") return mc.pair(opts, log);
+    if (sub === "off") return mc.off(opts, log);
+    if (sub === "status" || !sub) return mc.status(opts, out);
+    throw new Error("usage: spacesheep machine on [--folder DIR]... [--mode safe|auto] [--name NAME] [--no-service] | status | pair | off | run");
   },
   async update() { return selfUpdate(log); },
   async memory(opts) {

@@ -2,6 +2,8 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const { listenLoop, linkFrom, sessionId, STOPPED } = require("../lib/talk");
+// Hermetic: the nudges look for this machine's machine listener in the config dir.
+process.env.SPACESHEEP_CONFIG_DIR = require("fs").mkdtempSync(require("path").join(require("os").tmpdir(), "ss-talk-"));
 
 const URL_ = "https://spacesheep.dev/api/talk/listen/sst_" + "a".repeat(43);
 
@@ -68,4 +70,29 @@ test("start nudge: only on a machine that ran `talk on`, never after a compactio
   assert.equal(startNudge({ ...ev, source: "compact" }, { talk: true }), null);
   assert.equal(startNudge({ session_id: "$(touch /tmp/x)", source: "startup" }, { talk: true }), null);
   assert.equal(startNudge(null, { talk: true }), null);
+});
+
+test("a machine listener replaces both nudges: no per-session listener on that machine", () => {
+  const ev = { session_id: SID, source: "startup" };
+  assert.equal(startNudge(ev, { talk: true }, true), null);
+  assert.ok(startNudge(ev, { talk: true }, false));
+  assert.equal(deployNudge({ talk: "x" }, { CLAUDE_CODE_SESSION_ID: SID }, true), null);
+  assert.ok(deployNudge({ talk: "x" }, { CLAUDE_CODE_SESSION_ID: SID }, false));
+});
+
+test("machineOn reads machine.json's presence in the CLI's config dir", () => {
+  const fs = require("fs"), os = require("os"), path = require("path");
+  const { machineOn } = require("../lib/talk");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-talk-machine-"));
+  const prev = process.env.SPACESHEEP_CONFIG_DIR;
+  process.env.SPACESHEEP_CONFIG_DIR = dir;
+  try {
+    assert.equal(machineOn(), false);
+    fs.writeFileSync(path.join(dir, "machine.json"), "{}");
+    assert.equal(machineOn(), true);
+    assert.equal(startNudge({ session_id: SID, source: "startup" }, { talk: true }), null);
+  } finally {
+    if (prev === undefined) delete process.env.SPACESHEEP_CONFIG_DIR; else process.env.SPACESHEEP_CONFIG_DIR = prev;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
