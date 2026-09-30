@@ -178,16 +178,28 @@ alone can't open a channel into every session you run.
 
 ## Let spacesheep.dev reach this machine
 
-`spacesheep machine on` (1.21.0) runs one small listener in the background, so you
-can message any Claude Code session on this machine from
+`spacesheep machine on` runs one small listener in the background (about 45 MB), so
+you can message any Claude Code session on this machine from
 [spacesheep.dev/sessions](https://spacesheep.dev/sessions), or start a new one in a
 folder you allowed, from your phone or another computer. It replaces the listener
 each session had to start for Talk. Pro and Team.
 
+One line, in a terminal inside the folder the agent may work in:
+
 ```bash
-spacesheep machine on --folder ~/code/app --folder ~/code/site   # no --folder: the current folder
+npx -y spacesheep@latest machine on
+```
+
+It installs itself, signs you in if you aren't, turns on Talk for your account, lets
+/sessions see this computer's sessions (their state and titles; nothing that was
+said), and opens a page where you confirm with your passkey once. Run from your home
+folder, it asks which of your recent project folders to allow instead of allowing
+your whole home.
+
+```bash
+spacesheep machine on --folder ~/code/site   # allow another folder
 spacesheep machine status
-spacesheep machine off
+spacesheep machine off                       # stop, and forget the passkeys
 ```
 
 **Your passkey, checked here.** `on` prints a six-digit check and opens a pairing
