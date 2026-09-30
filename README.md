@@ -176,6 +176,55 @@ agent decides, under its own permission rules. Turning Talk on from the website
 doesn't enable the start-of-session note on any machine, so a stolen web session
 alone can't open a channel into every session you run.
 
+## Let spacesheep.dev reach this machine
+
+`spacesheep machine on` (1.21.0) runs one small listener in the background, so you
+can message any Claude Code session on this machine from
+[spacesheep.dev/sessions](https://spacesheep.dev/sessions), or start a new one in a
+folder you allowed, from your phone or another computer. It replaces the listener
+each session had to start for Talk. Pro and Team.
+
+```bash
+spacesheep machine on --folder ~/code/app --folder ~/code/site   # no --folder: the current folder
+spacesheep machine status
+spacesheep machine off
+```
+
+**Your passkey, checked here.** `on` prints a six-digit check and opens a pairing
+page that shows the same digits; you confirm there with your passkey (Touch ID, Face
+ID, a security key). The machine verifies the page's answer itself before it trusts
+the passkey, and from then on every message has to be signed with it: through a
+24-hour unlock (one Touch ID a day, kept by the page) or a fresh tap for one message.
+The machine checks those signatures against the passkeys it paired with at its own
+terminal, so a stolen web login, or the server itself, can't make it run anything.
+`spacesheep machine pair` adds another device's passkey.
+
+**What a message does.** It runs `claude -p` in the session's own folder, which the
+machine reads from the session's transcript on its own disk (never from the server),
+and only when that folder is inside one you allowed. A session that is open in a
+terminal right now is never written to: the message goes to a copy
+(`--fork-session`), and later messages follow the copy. The reply lands in the
+session's thread on the page. Two run at once at most, and messages to one session
+run in order. Each message reaches Claude Code behind a fixed line, written by the
+CLI, saying it came from spacesheep.dev and your passkey confirmed it.
+
+**Safe or auto.** Nobody is at the machine to approve a prompt, so:
+
+- `--mode safe` (the default) runs Claude Code in `dontAsk` mode: what your
+  permission rules already allow runs, anything that would ask is declined, and the
+  reply names the tools that were.
+- `--mode auto` runs it in Claude Code's own `auto` mode, which decides what is safe
+  to run without asking.
+
+Neither skips permissions. Re-running `on` adds folders or changes the mode, and
+restarts the listener. It runs as a launchd agent on macOS and a systemd user service
+on Linux (anywhere else, keep `spacesheep machine run` open in a terminal), logs one
+line per event to `~/.config/spacesheep/machine.log`, and stays down once it stops on
+purpose: the machine removed on the site, or Talk turned off. `spacesheep machine off`
+stops it, tells spacesheep.dev, and deletes the passkeys it trusted, so nothing that
+could run a command stays behind. On a machine with the listener, new sessions are no
+longer told to start their own Talk listener.
+
 ## Send feedback and inspect sessions
 
 CLI 1.7.0 adds commands for the remote MCP feedback and session tools.
@@ -256,6 +305,8 @@ observations cannot be reconstructed; named observations are retained for 14 day
 | `spacesheep sessions get <id> --source <source>` | Inspect recent retained session history; optional `--limit`; JSON output |
 | `spacesheep sessions export [-o DIR]` | Every session, complete, into `DIR/sessions` (a backup). `--since MS` for only recent ones, `--zip FILE` to keep the archive, `--json` |
 | `spacesheep sessions status` | Check local reporting hooks, and how many of this machine's sessions the board has, with links and accounts |
+| `spacesheep machine on` | Let spacesheep.dev reach this machine's Claude Code sessions: pairs your passkey here and starts the background listener. Options: `--folder` (repeatable; default the current folder), `--mode safe\|auto`, `--name`, `--no-service` |
+| `spacesheep machine status \| pair \| off` | Check the listener; add another passkey; stop it and forget the passkeys it trusted |
 | `spacesheep update` | Install the newest version globally |
 
 `<space>` is a UUID or a `spacesheep.dev/@user/slug` URL.
