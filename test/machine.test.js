@@ -96,6 +96,10 @@ const es = authenticator(-7);
 const br = browserKey();
 const MID = "m_testmachine00000000001";
 function setUp(extra = {}) {
+  // The machine's name is the hooks' name (config.machine), so the page can match a
+  // session to the listener that reaches it.
+  const cfg = require("../lib/config");
+  cfg.writeConfig({ ...cfg.readConfig(), machine: "test box" });
   machine.writeMachine({ id: MID, name: "test box", folders: [proj], mode: "safe", rp_id: "localhost", passkeys: [{ ...es.key, added_at: Date.now() }], created_at: Date.now(), ...extra });
 }
 const claudeCalls = () => { try { return fs.readFileSync(CLAUDE_LOG, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse); } catch (_) { return []; } };
@@ -483,4 +487,18 @@ test("parseResult and replyFrom: the result text, capped, secrets redacted, deni
   const r = machine.replyFrom({ result: "x".repeat(30000), permission_denials: [{ tool_name: "Edit" }, { tool_name: "Edit" }] });
   assert.ok(r.length <= 20000 && /Edit\.\)$/.test(r));
   assert.match(machine.replyFrom({ result: "the key is ghp_" + "a".repeat(36) }), /\[redacted\]/);
+});
+
+test("machine on --name renames the machine for the session hooks too", async () => {
+  const cfg = require("../lib/config");
+  setUp();
+  const srv = await fakeServer({ hello: (send) => send(200, { ok: true }) });
+  try {
+    await machine.on({ name: "Studio Mac", noService: true }, () => {});
+    assert.equal(cfg.readConfig().machine, "Studio Mac");
+    assert.equal(require("../lib/sessions").machineName(), "Studio Mac");
+    assert.equal(srv.st.hellos.at(-1).name, "Studio Mac");
+  } finally {
+    await srv.close();
+  }
 });
