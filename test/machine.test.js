@@ -502,3 +502,71 @@ test("machine on --name renames the machine for the session hooks too", async ()
     await srv.close();
   }
 });
+
+test("machine on from the home folder offers the folders recent sessions used", async () => {
+  const cwd = process.cwd();
+  try {
+    process.chdir(proj);
+    assert.deepEqual(await machine.defaultFolders(() => {}, { recentFolders: () => assert.fail("a project folder needs no picking") }), [proj]);
+    process.chdir(home);
+    const out = [];
+    assert.deepEqual(await machine.defaultFolders((s) => out.push(s), { recentFolders: () => [proj, outside], ask: async () => "2" }), [outside]);
+    assert.ok(out.some((l) => l.includes("1)")) && out.some((l) => l.includes("2)")));
+    assert.deepEqual(await machine.defaultFolders(() => {}, { recentFolders: () => [proj, outside], ask: async () => "" }), [proj]);
+    // No terminal to ask in: say where to run it instead of guessing.
+    await assert.rejects(machine.defaultFolders(() => {}, { recentFolders: () => [proj] }), /inside the project folder/);
+  } finally {
+    process.chdir(cwd);
+  }
+});
+
+test("machine on signs in first when there's no key, and says when it turned Talk on", async () => {
+  fs.rmSync(machine.files.machine(), { force: true });
+  const cfgm = require("../lib/config");
+  const env = process.env.SPACESHEEP_KEY;
+  delete process.env.SPACESHEEP_KEY;
+  const c = cfgm.readConfig();
+  delete c.key;
+  cfgm.writeConfig(c);
+  const phone = authenticator(-7);
+  const PAIR_ID = "m_signedinmachine0000001";
+  const srv = await fakeServer({
+    pairStart: (send) => send(200, { machine_id: PAIR_ID, code: "SIGNCODE12", pair_url: "http://localhost:8791/p", check: "123456", expires_at: Date.now() + 60000, rp_id: "localhost", talk_turned_on: true }),
+    poll: (send, code) => send(200, { status: "paired", passkey: phone.key, proof: pairProof(phone, PAIR_ID, code) }),
+  });
+  let logins = 0;
+  const out = [];
+  try {
+    await machine.on({ folder: [proj] }, (s) => out.push(s), { deviceLogin: async () => { logins++; return { key: "ss_test_machine", username: "me" }; }, openBrowser: () => {}, pollMs: 5, skipHooks: true });
+  } finally {
+    process.env.SPACESHEEP_KEY = env;
+    await srv.close();
+  }
+  assert.equal(logins, 1);
+  assert.equal(cfgm.readConfig().key, "ss_test_machine");
+  assert.ok(out.some((l) => /Signed in as @me/.test(l)));
+  assert.ok(out.some((l) => /Turned on “Talk to your sessions”/.test(l)));
+});
+
+test("machine on turns on session reporting (state only, no turn sync) when the hooks are missing", async () => {
+  const settings = path.join(home, ".claude", "settings.json");
+  fs.rmSync(settings, { force: true });
+  fs.rmSync(machine.files.machine(), { force: true });
+  const phone = authenticator(-7);
+  const PAIR_ID = "m_hooksmachine0000000001";
+  const srv = await fakeServer({
+    pairStart: (send) => send(200, { machine_id: PAIR_ID, code: "HOOKCODE12", pair_url: "http://localhost:8791/p", check: "654321", expires_at: Date.now() + 60000, rp_id: "localhost" }),
+    poll: (send, code) => send(200, { status: "paired", passkey: phone.key, proof: pairProof(phone, PAIR_ID, code) }),
+  });
+  const out = [];
+  try {
+    await machine.on({ folder: [proj] }, (s) => out.push(s), { openBrowser: () => {}, pollMs: 5 });
+  } finally {
+    await srv.close();
+  }
+  const st = JSON.parse(fs.readFileSync(settings, "utf8"));
+  const commands = Object.values(st.hooks).flat().flatMap((h) => h.hooks.map((x) => x.command));
+  assert.ok(commands.some((c) => /sessions ping stop/.test(c)));
+  assert.ok(!commands.some((c) => /memory sync/.test(c)), "no turn sync without asking");
+  assert.ok(out.some((l) => /state and titles only/.test(l)));
+});
