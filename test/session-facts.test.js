@@ -42,6 +42,7 @@ describe("titles", () => {
     assert.strictEqual(facts.title, "I'm interested in figuring out performance cutoffs...");
     assert.strictEqual(facts.title_source, "first-ask");
     assert.strictEqual(facts.title_auto, true);
+    assert.strictEqual(facts.title_live, undefined);
   });
 
   it("cuts a first ask the way the Claude Code app does: 50 characters, then ...", () => {
@@ -63,12 +64,52 @@ describe("titles", () => {
     assert.strictEqual(facts.title_source, "harness");
   });
 
+  it("marks the running session's current name live, with when it was first seen", () => {
+    // Each step runs in a fresh process, as each hook does: the registry is read once per process.
+    const fresh = (file, sid) => JSON.parse(require("child_process").spawnSync(process.execPath, ["-e",
+      `console.log(JSON.stringify(require(${JSON.stringify(path.join(__dirname, "..", "lib", "sessions"))}).claudeFacts(${JSON.stringify(file)}, ${JSON.stringify(sid)})))`],
+      { env: process.env, encoding: "utf8" }).stdout);
+    const id = newId();
+    const f = transcript(id, [user("various requests"), reply()]);
+    registry(104, { sessionId: id, name: "various requests", nameSource: "user" });
+    const a = fresh(f, id);
+    assert.deepStrictEqual([a.title, a.title_source, a.title_live], ["various requests", "custom", true]);
+    assert.ok(a.title_seen_at > 0);
+    // The process exits: the remembered name is still the title, but not a live one.
+    fs.unlinkSync(path.join(CONFIG, "sessions", "104.json"));
+    const gone = fresh(f, id);
+    assert.deepStrictEqual([gone.title, gone.title_live], ["various requests", false]);
+    assert.strictEqual(gone.title_seen_at, a.title_seen_at, "the same title keeps its first-seen time");
+    // The session resumes in a new process that Claude Code names "auto" (an app rename
+    // arrives this way too): the current name, live, first seen later.
+    registry(105, { sessionId: id, name: "AIfoundry maintenance", nameSource: "auto" });
+    const b = fresh(f, id);
+    assert.deepStrictEqual([b.title, b.title_source, b.title_live], ["AIfoundry maintenance", "harness", true]);
+    assert.ok(b.title_seen_at > a.title_seen_at);
+    assert.strictEqual(fresh(f, id).title_seen_at, b.title_seen_at, "repeated hooks keep the observation clock");
+    // A /rename recorded in the transcript still wins over the registry's auto name, and is not marked live.
+    const g = transcript(id, [user("x"), { type: "custom-title", customTitle: "Kept" }, reply()]);
+    const c = fresh(g, id);
+    assert.deepStrictEqual([c.title, c.title_source, c.title_live], ["Kept", "custom", undefined]);
+    fs.unlinkSync(path.join(CONFIG, "sessions", "105.json"));
+  });
+
+  it("reports an app/Remote Control rename recorded as auto as a live harness name", () => {
+    const id = newId();
+    const f = transcript(id, [user("hello"), reply()]);
+    registry(106, { sessionId: id, name: "Renamed in the app", nameSource: "auto" });
+    const facts = ses.claudeFacts(f, id);
+    assert.deepStrictEqual([facts.title, facts.title_source, facts.title_live], ["Renamed in the app", "harness", true]);
+    assert.ok(facts.title_seen_at > 0);
+    fs.unlinkSync(path.join(CONFIG, "sessions", "106.json"));
+  });
+
   it("puts a name the person gave the session above Claude Code's own", () => {
     const id = newId();
     const f = transcript(id, [user("hello"), { type: "ai-title", aiTitle: "Greeting" }, { type: "custom-title", customTitle: "Power budget" }, reply()]);
     assert.deepStrictEqual([ses.claudeFacts(f, id).title, ses.claudeFacts(f, id).title_source], ["Power budget", "custom"]);
-    registry(103, { sessionId: id, name: "Renamed in the app", nameSource: "user" });
-    assert.deepStrictEqual([ses.claudeFacts(f, id).title, ses.claudeFacts(f, id).title_source], ["Renamed in the app", "custom"]);
+    registry(103, { sessionId: id, name: "Renamed with /rename", nameSource: "user" });
+    assert.deepStrictEqual([ses.claudeFacts(f, id).title, ses.claudeFacts(f, id).title_source], ["Renamed with /rename", "custom"]);
   });
 
   it("finds a first ask that sits past the 64 KB head (pasted screenshots)", () => {
