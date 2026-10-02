@@ -88,3 +88,71 @@ test("moveTo: a failed install says how to finish, since this CLI's hooks are al
   const run = (a) => { if (a[0] === "install") throw new Error("`sessionpipe install` stopped (exit 1)"); };
   await assert.rejects(sp.moveTo("hooks", {}, () => {}, { run, dropOwnHooks: NOOP }), /npx -y sessionpipe@latest install/);
 });
+
+// Exercise the real runner, replacing only subprocess execution (never run npx).
+function withSpawn(t, spawn) {
+  t.mock.method(require("child_process"), "spawnSync", spawn);
+  const file = require.resolve("../lib/sessionpipe");
+  const cached = require.cache[file];
+  delete require.cache[file];
+  const loaded = require(file);
+  require.cache[file] = cached;
+  return loaded;
+}
+
+for (const failure of [{ status: 1 }, { status: null, signal: "SIGTERM" }, { status: null, signal: "SIGINT" }]) {
+  test(`pair failure after migration reports completed work and retry (${failure.signal || failure.status})`, async (t) => {
+    sandbox(t);
+    process.env.SPACESHEEP_KEY = KEY;
+    const ran = [], logs = [];
+    const runner = withSpawn(t, (_cmd, args) => {
+      ran.push(args[2]);
+      return args[2] === "control" ? failure : { status: 0 };
+    });
+    const opts = { mode: "safe", folder: ["/projects/my app", "/other"], name: "My Mac", noService: true };
+    await assert.rejects(runner.moveTo("machine", opts, s => logs.push(s), {
+      dropOwnHooks: () => ran.push("drop"),
+      machine: { readMachine: () => { assert.fail("old listener must stay on after failed pair"); } },
+    }), e => {
+      assert.match(e.message, /reporting is installed and migrated/);
+      assert.match(e.message, /spacesheep's own session hooks are off/);
+      assert.match(e.message, /Only pairing remains/);
+      assert.ok(e.message.includes('npx -y sessionpipe@latest control pair https://spacesheep.dev --mode safe --folder "/projects/my app" --folder /other --name "My Mac" --no-service'));
+      assert.match(e.message, failure.signal ? new RegExp(`signal ${failure.signal}`) : /exit 1/);
+      assert.doesNotMatch(e.message, /nothing of spacesheep's own was removed|exit null/);
+      return true;
+    });
+    assert.deepEqual(ran, ["sink", "drop", "install", "control"]);
+    assert.ok(!logs.join("\n").includes(KEY));
+  });
+}
+
+test("sink failure before removal reports nothing removed and hides the key", async (t) => {
+  sandbox(t);
+  process.env.SPACESHEEP_KEY = KEY;
+  const runner = withSpawn(t, () => ({ status: 2 }));
+  await assert.rejects(runner.moveTo("machine", {}, NOOP, {
+    dropOwnHooks: () => assert.fail("must not remove hooks"),
+  }), e => {
+    assert.match(e.message, /exit 2.*nothing of spacesheep's own was removed/);
+    assert.doesNotMatch(e.message, /reporting is installed|Only pairing remains/);
+    assert.ok(!e.message.includes(KEY));
+    return true;
+  });
+});
+
+test("install failure after removal never claims nothing was removed", async (t) => {
+  sandbox(t);
+  process.env.SPACESHEEP_KEY = KEY;
+  let dropped = false;
+  const runner = withSpawn(t, (_cmd, args) => ({ status: args[2] === "install" ? 1 : 0 }));
+  await assert.rejects(runner.moveTo("machine", {}, NOOP, {
+    dropOwnHooks: () => { dropped = true; },
+  }), e => {
+    assert.equal(dropped, true);
+    assert.match(e.message, /own session hooks are already off/);
+    assert.match(e.message, /npx -y sessionpipe@latest install/);
+    assert.doesNotMatch(e.message, /nothing of spacesheep's own was removed|reporting is installed|Only pairing remains/);
+    return true;
+  });
+});
