@@ -220,6 +220,17 @@ session's thread on the page. Two run at once at most, and messages to one sessi
 run in order. Each message reaches Claude Code behind a fixed line, written by the
 CLI, saying it came from spacesheep.dev and your passkey confirmed it.
 
+**Attached files.** From 1.27.0, a new session started from /sessions can carry
+images and files (up to 10, 25 MB each, 50 MB in all). The signed command names
+each one by its SHA-256, so the server can't swap a file: the listener downloads
+them with its key, stops past the signed size, checks the length and hash, and only
+then writes them (exclusively, mode 0600, never through a symlink) to
+`<folder>/.sessionpipe/files/<session>/<name>`. `.sessionpipe/.gitignore` (`*`)
+keeps them out of the repo. Claude Code gets your message plus an "Attached files
+(saved in this folder):" list of relative paths. If any file fails, nothing starts
+and the job reports why. Older listeners don't get files offered; update with
+`npx -y spacesheep@latest machine on`.
+
 **Safe or auto.** Nobody is at the machine to approve a prompt, so:
 
 - `--mode safe` (the default) runs Claude Code in `dontAsk` mode: what your
