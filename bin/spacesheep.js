@@ -61,6 +61,10 @@ const HELP = `
                                            spacesheep as its sink, then removes this CLI's own hooks
     spacesheep sessions status | uninstall | backfill | forget
                                            this CLI's old reporting hooks
+    spacesheep stream <name> --system [--load-test] [--service]
+                                           stream this machine's own numbers (per-core load, memory, temperatures);
+                                           --load-test adds Run test / one core / memory / stop buttons a page can press;
+                                           --service keeps it running in the background (systemd / launchd)
     spacesheep stream <name> --run "cmd"   push every line a command prints to a live stream (JSON or text);
                                            pages that declare it (<meta name="ss-streams" content="<name>">) draw it live
     spacesheep stream <name> --every 1s -- cmd [args]
@@ -124,7 +128,7 @@ function parse(argv) {
   }
   return opts;
 }
-const FLAGS = new Set(["--new", "--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service"]);
+const FLAGS = new Set(["--system", "--load-test", "--service", "--remove-service", "--new", "--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 /** --scope as the server names it: stream(s) → "stream", session(s)/ingest → "ingest", full/none → undefined. */
 function keyScope(v) {
@@ -285,7 +289,11 @@ const commands = {
     }
     throw new Error("usage: spacesheep keys create [--scope stream|sessions|full] [--name NAME] [--json] | keys save   (reads a key from stdin)");
   },
-  async stream(opts) { return require("../lib/stream").run(opts, cfg, log); },
+  async stream(opts) {
+    if (opts.removeService) return require("../lib/stream-service").remove(opts, log);
+    if (opts.service) return require("../lib/stream-service").install(opts, log);
+    return require("../lib/stream").run(opts, cfg, log);
+  },
   async streams(opts) { return require("../lib/stream").list(opts, cfg, out); },
   async update() { return selfUpdate(log); },
   async memory(opts) {

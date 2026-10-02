@@ -313,9 +313,21 @@ npx -y spacesheep@latest keys create --scope stream --name lab-1 | ssh lab-1 npx
 npx -y spacesheep@latest connect ss_… lab-1 --scope stream
 ```
 
-An agent can mint one too: MCP `api_keys create scope:"streams"`. Then:
+An agent can mint one too: MCP `api_keys create scope:"streams"`. Then, on the box:
 
 ```bash
+# this machine's own numbers + Run test buttons a page can press, kept running in the background
+npx -y spacesheep@latest stream lab-work/my-box --system --load-test --service
+```
+
+- `--system`: a built-in reader of the machine itself, twice a second: per-core load, load average, memory, temperatures (real sensors on Linux when present, otherwise a thermal model, marked `"temp_source":"model"`), plus pressure stalls, disk and network on Linux. Linux and macOS.
+- `--load-test`: built-in buttons with nothing to install: `run` (every core at `intensity`% for `seconds`, both clamped), `cpu_one`, `memory`, `stop`. The readings say which test is running and which buttons exist.
+- `--service`: a systemd user unit (Linux) or launchd agent (macOS) that keeps the stream running and restarts it; `--remove-service` takes it away.
+
+Your own numbers instead:
+
+```bash
+npx -y spacesheep@latest stream lab-work/esperanto-1 --run "python3 read-sensors.py"   # each JSON line it prints is a value
 npx -y spacesheep@latest stream lab-work/load --every 1s -- cat /proc/loadavg
 npx -y spacesheep@latest stream lab-work/gcp-1 --run "node collect.js" \
   --on cpu_all="stress-ng --cpu 0 -t 30s" --on-dir /opt/lab/tests
@@ -352,7 +364,7 @@ A page shows a stream once it declares it: `<meta name="ss-streams" content="lab
 | `spacesheep machine status \| pair \| off` | Check the listener; add another passkey; stop it and forget the passkeys it trusted |
 | `spacesheep keys create [--scope stream\|sessions\|full] [--name N]` | Mint a key with the one this machine holds; prints only the key, so it pipes into another machine's `keys save` |
 | `spacesheep keys save` | Store a key read from stdin (checked against the server first) |
-| `spacesheep stream <name>` | Push live values to a stream. Options: `--run "cmd"`, `--every 1s -- cmd`, `--on name=cmd` (repeatable), `--on-dir DIR`, `--once` |
+| `spacesheep stream <name>` | Push live values to a stream. Options: `--system`, `--load-test`, `--service` / `--remove-service`, `--run "cmd"`, `--every 1s -- cmd`, `--on name=cmd` (repeatable), `--on-dir DIR`, `--host`, `--once` |
 | `spacesheep streams [prefix]` | Your streams: rate, watchers, whether a machine listens |
 | `spacesheep update` | Install the newest version globally |
 
