@@ -68,6 +68,13 @@ const HELP = `
     spacesheep stream <name> ... --on name=cmd [--on …] [--on-dir DIR]
                                            run a page's button presses here: only what is listed runs
     spacesheep streams [prefix]            your streams: rate, who is watching, whether a machine listens
+    spacesheep keys create [--scope stream|sessions|full] [--name NAME]
+                                           mint a key with the one this machine holds; prints only the key, so
+                                           \`spacesheep keys create --scope stream --name lab-1 | ssh lab-1 spacesheep keys save\`
+                                           sets up a lab box with no browser and no key on screen
+    spacesheep keys save                   store a key read from stdin (checked against the server first)
+    spacesheep connect <ss_key> [name] --scope stream
+                                           on the box itself: mint its own streams-only key from a pasted one
     spacesheep login --scope stream [--name NAME]
                                            a key that can only push to your streams — for a lab box
     spacesheep update                      install the newest version globally
@@ -119,6 +126,22 @@ function parse(argv) {
 }
 const FLAGS = new Set(["--new", "--no-manifest", "--claude", "--codex", "--antigravity", "--no-memory", "--codex-chain", "--once", "--no-service"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+/** --scope as the server names it: stream(s) → "stream", session(s)/ingest → "ingest", full/none → undefined. */
+function keyScope(v) {
+  if (!v || v === "full") return undefined;
+  if (v === "stream" || v === "streams") return "stream";
+  if (v === "sessions" || v === "session" || v === "ingest") return "ingest";
+  throw new Error(`--scope takes stream, sessions or full (got "${v}")`);
+}
+function readStdin() {
+  return new Promise((resolve) => {
+    if (process.stdin.isTTY) return resolve("");
+    let buf = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (d) => { if (buf.length < 4096) buf += d; });
+    process.stdin.on("end", () => resolve(buf));
+  });
+}
 
 const log = (...a) => { if (!process.env.SPACESHEEP_QUIET) console.error(...a); };
 const out = (v) => console.log(typeof v === "string" ? v : JSON.stringify(v, null, 2));
@@ -143,15 +166,18 @@ const commands = {
     const given = opts._[1];
     if (!parent || !parent.startsWith("ss_")) throw new Error("usage: spacesheep connect <ss_key> [name] — create the key at https://spacesheep.dev/settings/api-keys#create (or skip connect and set SPACESHEEP_KEY=ss_… in the environment)");
     const name = (given || os.hostname().split(".")[0] || "machine").slice(0, 60);
-    const { key, username } = await connectWithKey(cfg.appOrigin(), parent, name, log);
+    const scope = keyScope(opts.scope);
+    const { key, username } = await connectWithKey(cfg.appOrigin(), parent, name, log, scope);
     cfg.writeConfig({
       ...cfg.readConfig(), key, username, machine: name,
       origin: process.env.SPACESHEEP_ORIGIN || undefined,
       appOrigin: process.env.SPACESHEEP_APP_ORIGIN || undefined,
     });
-    // Prove the stored key works against the MCP server before saying so.
-    await client().call("list_spaces").catch((e) => { if (e.code === "EAUTH" || e.code === "ENET") throw e; });
-    log(`\n  ✓ Connected${username ? ` as @${username}` : ""} on "${name}". Key saved to ${cfg.configPath()}\n`);
+    // Prove the stored key works before saying so: a streams-only key against the
+    // stream routes (MCP refuses it by design), anything else against the MCP server.
+    if (scope === "stream") await require("../lib/stream").checkKey(cfg, key);
+    else await client().call("list_spaces").catch((e) => { if (e.code === "EAUTH" || e.code === "ENET") throw e; });
+    log(`\n  ✓ Connected${username ? ` as @${username}` : ""} on "${name}"${scope === "stream" ? " with a streams-only key" : ""}. Key saved to ${cfg.configPath()}\n`);
   },
   async logout() {
     const c = cfg.readConfig(); delete c.key; delete c.username; delete c.machine; cfg.writeConfig(c);
@@ -232,6 +258,32 @@ const commands = {
     if (sub === "off") return mc.off(opts, log);
     if (sub === "status" || !sub) return mc.status(opts, out);
     throw new Error("usage: spacesheep machine on [--folder DIR]... [--mode safe|auto] [--name NAME] [--no-service] | status | pair | off | run");
+  },
+  // `keys create`: mint a key with the one this machine holds — no browser. Only the key
+  // goes to stdout, so it pipes straight into another machine's `keys save`:
+  //   spacesheep keys create --scope stream --name lab-1 | ssh lab-1 spacesheep keys save
+  async keys(opts) {
+    const sub = opts._[0];
+    if (sub === "create") {
+      const scope = keyScope(opts.scope);
+      const k = cfg.resolveKey();
+      if (!k) throw Object.assign(new Error("not signed in — `spacesheep login` first (keys create mints from the key this machine holds)"), { code: "EAUTH" });
+      const name = String(opts.name || `${scope === "stream" ? "streams" : "key"} · ${os.hostname().split(".")[0]}`).slice(0, 60);
+      const { key } = await connectWithKey(cfg.appOrigin(), k.key, name, () => {}, scope);
+      if (opts.json) return out({ key, name, scope: scope || "full" });
+      process.stdout.write(key + "\n");
+      log(`  ✓ Created ${scope === "stream" ? "a streams-only" : scope === "ingest" ? "a sessions-only" : "a full"} key "${name}" (revoke it in Settings → API keys or with the MCP api_keys tool)`);
+      return;
+    }
+    if (sub === "save") {
+      const raw = cfg.cleanKey(opts._[1] || (await readStdin()));
+      if (!raw.startsWith("ss_")) throw new Error("usage: … | spacesheep keys save   (reads an ss_ key from stdin)");
+      await require("../lib/stream").checkKey(cfg, raw);
+      cfg.writeConfig({ ...cfg.readConfig(), key: raw, machine: opts.name || os.hostname().split(".")[0], origin: process.env.SPACESHEEP_ORIGIN || undefined, appOrigin: process.env.SPACESHEEP_APP_ORIGIN || undefined });
+      log(`  ✓ Key saved to ${cfg.configPath()}`);
+      return;
+    }
+    throw new Error("usage: spacesheep keys create [--scope stream|sessions|full] [--name NAME] [--json] | keys save   (reads a key from stdin)");
   },
   async stream(opts) { return require("../lib/stream").run(opts, cfg, log); },
   async streams(opts) { return require("../lib/stream").list(opts, cfg, out); },

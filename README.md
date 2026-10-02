@@ -304,8 +304,18 @@ A **stream** is a named value (`lab-work/gcp-1`) that a machine pushes and every
 tab of a page draws as it arrives: load average, temperatures, a sensor grid. Nothing is
 published per value. The first push creates the stream.
 
+A streams-only key can only push to your streams and hear their button presses. Get one onto a box with no browser:
+
 ```bash
-npx -y spacesheep@latest login --scope stream     # a key that can ONLY push to your streams
+# from a machine that's already signed in: mint it and save it on the box, never printed
+npx -y spacesheep@latest keys create --scope stream --name lab-1 | ssh lab-1 npx -y spacesheep@latest keys save
+# or on the box, with any full key (it mints its own streams-only key; the pasted one isn't stored)
+npx -y spacesheep@latest connect ss_… lab-1 --scope stream
+```
+
+An agent can mint one too: MCP `api_keys create scope:"streams"`. Then:
+
+```bash
 npx -y spacesheep@latest stream lab-work/load --every 1s -- cat /proc/loadavg
 npx -y spacesheep@latest stream lab-work/gcp-1 --run "node collect.js" \
   --on cpu_all="stress-ng --cpu 0 -t 30s" --on-dir /opt/lab/tests
@@ -340,6 +350,8 @@ A page shows a stream once it declares it: `<meta name="ss-streams" content="lab
 | `spacesheep sessions status` | Check local reporting hooks, and how many of this machine's sessions the board has, with links and accounts |
 | `spacesheep machine on` | Let spacesheep.dev reach this machine's Claude Code sessions: pairs your passkey here and starts the background listener. Options: `--folder` (repeatable; default the current folder), `--mode safe\|auto`, `--name`, `--no-service` |
 | `spacesheep machine status \| pair \| off` | Check the listener; add another passkey; stop it and forget the passkeys it trusted |
+| `spacesheep keys create [--scope stream\|sessions\|full] [--name N]` | Mint a key with the one this machine holds; prints only the key, so it pipes into another machine's `keys save` |
+| `spacesheep keys save` | Store a key read from stdin (checked against the server first) |
 | `spacesheep stream <name>` | Push live values to a stream. Options: `--run "cmd"`, `--every 1s -- cmd`, `--on name=cmd` (repeatable), `--on-dir DIR`, `--once` |
 | `spacesheep streams [prefix]` | Your streams: rate, watchers, whether a machine listens |
 | `spacesheep update` | Install the newest version globally |
