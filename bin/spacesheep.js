@@ -40,15 +40,16 @@ const HELP = `
     spacesheep talk status | on | off      "Talk to your sessions": message a session from its page (Pro/Team)
     spacesheep talk listen [--session ID] [--once]
                                            wait for those messages here, one JSON line each
-                                           (--session defaults to $CLAUDE_CODE_SESSION_ID)
+                                           (--session defaults to $CLAUDE_CODE_SESSION_ID);
+                                           sessionpipe replaces it — see machine on
     spacesheep talk reply <text> [--session ID]
                                            answer in the page's Session tab
     spacesheep machine on [--folder DIR]... [--mode safe|auto] [--name NAME]
-                                           let spacesheep.dev reach this machine's Claude Code sessions:
-                                           pairs your passkey here, then a background listener runs your
-                                           messages (and new sessions) in those folders (Pro/Team)
+                                           let spacesheep.dev reach this machine's Claude Code sessions
+                                           (Pro/Team): runs sessionpipe's install and control pairing
+                                           (sessionpipe.org), then turns off the old spacesheep listener
     spacesheep machine status | pair | off
-                                           check it; add another passkey; stop it and forget the passkeys
+                                           the old spacesheep listener: check it; add a passkey; stop it
     spacesheep sessions list [--state done] [--source codex] [--machine NAME]
                                            inspect tracked sessions (JSON); --since ms --offset N --limit N
     spacesheep sessions get <id> --source <source> [--limit N]
@@ -56,11 +57,13 @@ const HELP = `
     spacesheep sessions export [-o DIR] [--since MS] [--zip FILE]
                                            every session, complete, into DIR/sessions (a backup);
                                            --since takes only those active since then
-    spacesheep sessions install | status | uninstall | backfill | forget
-                                           manage local reporting hooks
+    spacesheep sessions install            moved to sessionpipe: runs \`sessionpipe install\` with
+                                           spacesheep as its sink, then removes this CLI's own hooks
+    spacesheep sessions status | uninstall | backfill | forget
+                                           this CLI's old reporting hooks
     spacesheep update                      install the newest version globally
-    spacesheep memory install [--claude] [--codex] [--codex-chain]   remember every Claude Code / Codex session in spacesheep
-    spacesheep memory status | uninstall   what is wired and synced; remove the hooks
+    spacesheep memory install              same as sessions install (sessionpipe sends the turns at tier 2)
+    spacesheep memory status | uninstall   this CLI's old turn-sync hooks: what is wired; remove them
 
   deploy options
     --space <uuid|url>       update this space (else the .spacesheep.json in the folder, else create)
@@ -209,7 +212,8 @@ const commands = {
     const sub = opts._[0];
     // The listener runs until it is told to stop, then exits 0 so its service stays down.
     if (sub === "run") process.exit(await mc.run(opts));
-    if (sub === "on") return mc.on(opts, log);
+    // Moved to sessionpipe (lib/sessionpipe.js): its install, its control pairing, then the old listener off.
+    if (sub === "on") return require("../lib/sessionpipe").moveTo("machine", opts, log);
     if (sub === "pair") return mc.pair(opts, log);
     if (sub === "off") return mc.off(opts, log);
     if (sub === "status" || !sub) return mc.status(opts, out);
@@ -219,7 +223,7 @@ const commands = {
   async memory(opts) {
     const mem = require("../lib/memory");
     const sub = opts._[0];
-    if (sub === "install") return mem.install(opts, log);
+    if (sub === "install") return require("../lib/sessionpipe").moveTo("hooks", opts, log);
     if (sub === "uninstall") return mem.uninstall(opts, log);
     if (sub === "status") return mem.status(opts, out);
     throw new Error("usage: spacesheep memory install [--claude] [--codex] [--codex-chain] | uninstall | status");
@@ -233,7 +237,7 @@ const commands = {
     }
     const ses = require("../lib/sessions");
     const sub = opts._[0];
-    if (sub === "install") return ses.install(opts, log, process.argv.slice(3));
+    if (sub === "install") return require("../lib/sessionpipe").moveTo("hooks", opts, log);
     if (sub === "uninstall") return ses.uninstall(opts, log);
     if (sub === "status") return ses.status(opts, out, cfg.resolveKey() ? (name, args) => client().call(name, args) : null);
     if (sub === "backfill") { const all = !opts.claude && !opts.codex && !opts.antigravity; return ses.backfill(log, undefined, { claude: all || !!opts.claude, codex: all || !!opts.codex, antigravity: all || !!opts.antigravity }); }
