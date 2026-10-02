@@ -106,7 +106,7 @@ const claudeCalls = () => { try { return fs.readFileSync(CLAUDE_LOG, "utf8").tri
 
 // --- a fake spacesheep.dev -------------------------------------------------------------
 function fakeServer(handlers = {}) {
-  const st = { hellos: [], reports: [], waits: 0, pairStarts: [], polls: 0, offs: 0, jobs: [], expect: 0, served: false };
+  const st = { hellos: [], reports: [], waits: 0, pairStarts: [], polls: 0, offs: 0, jobs: [], expect: 0, served: false, blobs: {}, fileGets: [] };
   const final = () => st.reports.filter((r) => r.status !== "running").length;
   const server = http.createServer(async (req, res) => {
     let body = "";
@@ -137,6 +137,14 @@ function fakeServer(handlers = {}) {
     if (req.method === "GET" && url.pathname === "/api/machines/pair/poll") {
       st.polls++;
       return handlers.poll(send, url.searchParams.get("code"), st.polls);
+    }
+    if (req.method === "GET" && (m = /^\/api\/machines\/([^/]+)\/files\/([^/]+)$/.exec(url.pathname))) {
+      st.fileGets.push({ machine: m[1], sha: m[2] });
+      if (handlers.file) return handlers.file(req, res, m[2]);
+      const b = st.blobs[m[2]];
+      if (!b) return send(404, { error: "no such file" });
+      res.writeHead(200, { "content-type": b.type || "application/octet-stream" });
+      return res.end(b.bytes);
     }
     if (req.method === "POST" && /^\/api\/machines\/[^/]+\/off$/.test(url.pathname)) { st.offs++; return send(200, { ok: true }); }
     send(404, { error: "no route" });
@@ -569,4 +577,114 @@ test("machine on turns on session reporting (state only, no turn sync) when the 
   assert.ok(commands.some((c) => /sessions ping stop/.test(c)));
   assert.ok(!commands.some((c) => /memory sync/.test(c)), "no turn sync without asking");
   assert.ok(out.some((l) => /state and titles only/.test(l)));
+});
+
+// --- files attached to a new session ------------------------------------------------------
+
+const shaOf = (b) => crypto.createHash("sha256").update(b).digest("base64url");
+const fileOf = (name, type, bytes) => ({ name, type, size: bytes.length, sha256: shaOf(bytes) });
+async function startWithFiles(id, files, handlers = {}, blobs = {}) {
+  setUp();
+  fs.writeFileSync(CLAUDE_LOG, "");
+  const srv = await fakeServer(handlers);
+  Object.assign(srv.st.blobs, blobs);
+  const NEW = crypto.randomUUID();
+  srv.st.jobs = [signedJob(id, makeCmd({ machine: MID, action: "start", session: NEW, cwd: sub, text: "look at these", files }), makeGrant(es, br), br)];
+  srv.st.expect = 1;
+  assert.equal(await runOnce(), 0);
+  await srv.close();
+  return { st: srv.st, NEW, r: finalReport(srv.st, id), calls: claudeCalls(), dir: path.join(sub, ".sessionpipe", "files", NEW) };
+}
+
+test("files: downloaded with the key, verified, written 0600 under .sessionpipe, and listed after the text", async () => {
+  const png = crypto.randomBytes(183402), pdf = crypto.randomBytes(1258291);
+  const files = [fileOf("screenshot.png", "image/png", png), fileOf("notes.pdf", "application/pdf", pdf)];
+  const { st, NEW, r, calls, dir } = await startWithFiles(50, files, {}, {
+    [files[0].sha256]: { bytes: png, type: "image/png" }, [files[1].sha256]: { bytes: pdf, type: "application/pdf" },
+  });
+  assert.equal(r.status, "done", r.note);
+  assert.deepEqual(st.fileGets, files.map((f) => ({ machine: MID, sha: f.sha256 })));
+  assert.deepEqual(fs.readFileSync(path.join(dir, "screenshot.png")), png);
+  assert.deepEqual(fs.readFileSync(path.join(dir, "notes.pdf")), pdf);
+  if (process.platform !== "win32") {
+    assert.equal(fs.statSync(path.join(dir, "screenshot.png")).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(path.join(sub, ".sessionpipe")).mode & 0o777, 0o700);
+  }
+  assert.equal(fs.readFileSync(path.join(sub, ".sessionpipe", ".gitignore"), "utf8"), "*\n");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].cwd, sub);
+  assert.equal(calls[0].args[calls[0].args.length - 1], machine.WRAP + "look at these\n\nAttached files (saved in this folder):\n" +
+    `- .sessionpipe/files/${NEW}/screenshot.png (image/png, 179 KB)\n` +
+    `- .sessionpipe/files/${NEW}/notes.pdf (application/pdf, 1.2 MB)`);
+  // A .gitignore someone already has is left alone.
+  fs.writeFileSync(path.join(sub, ".sessionpipe", ".gitignore"), "# mine\n*\n");
+  const again = await startWithFiles(51, [files[0]], {}, { [files[0].sha256]: { bytes: png } });
+  assert.equal(again.r.status, "done", again.r.note);
+  assert.equal(fs.readFileSync(path.join(sub, ".sessionpipe", ".gitignore"), "utf8"), "# mine\n*\n");
+  assert.equal(machine.humanSize(900), "900 B");
+  assert.equal(machine.humanSize(25 * 1024 * 1024), "25 MB");
+});
+
+test("files: a hash mismatch, oversize bytes, or a 404 fail the job; nothing is written and claude never runs", async () => {
+  const good = Buffer.from("the real screenshot bytes");
+  const f = fileOf("shot.png", "image/png", good);
+  const swapped = Buffer.from("the fake screenshot bytes"); // same length, other bytes
+  const cases = [
+    [60, { [f.sha256]: { bytes: swapped } }, {}, /doesn't match its signed hash/],
+    [61, { [f.sha256]: { bytes: Buffer.concat([good, Buffer.from("!")]) } }, {}, /larger than its signed size/],
+    // no content-length (chunked): the cap is enforced while streaming
+    [62, {}, { file: (req, res) => { res.writeHead(200, { "content-type": "image/png" }); res.write(good); res.write(Buffer.alloc(64 * 1024)); res.end(); } }, /larger than its signed size/],
+    [63, { [f.sha256]: { bytes: good.subarray(1) } }, {}, /bytes, not the signed/],
+    [64, {}, {}, /isn't on spacesheep\.dev any more/],
+    [65, {}, { file: (req, res) => { res.writeHead(500); res.end(); } }, /HTTP 500/],
+  ];
+  for (const [id, blobs, handlers, re] of cases) {
+    const { r, calls, dir, st } = await startWithFiles(id, [f], handlers, blobs);
+    assert.equal(r.status, "failed", `job ${id}`);
+    assert.match(r.note, re, `job ${id}`);
+    assert.ok(st.reports.some((x) => x.job === id && x.status === "running"));
+    assert.equal(calls.length, 0, `job ${id} ran claude`);
+    assert.ok(!fs.existsSync(dir), `job ${id} wrote ${dir}`);
+  }
+});
+
+test("files: a symlinked .sessionpipe (or a folder in it) is refused, nothing written through it", async () => {
+  const bytes = Buffer.from("png");
+  const f = fileOf("a.png", "image/png", bytes);
+  const blobs = { [f.sha256]: { bytes } };
+  const target = path.join(home, "symlink-target");
+  fs.mkdirSync(target, { recursive: true });
+  fs.rmSync(path.join(sub, ".sessionpipe"), { recursive: true, force: true });
+  fs.symlinkSync(target, path.join(sub, ".sessionpipe"));
+  let out = await startWithFiles(70, [f], {}, blobs);
+  assert.equal(out.r.status, "failed");
+  assert.match(out.r.note, /symlink/);
+  assert.equal(out.calls.length, 0);
+  assert.deepEqual(fs.readdirSync(target), []);
+
+  // .sessionpipe is real, but files/ points elsewhere
+  fs.unlinkSync(path.join(sub, ".sessionpipe"));
+  fs.mkdirSync(path.join(sub, ".sessionpipe"));
+  fs.symlinkSync(target, path.join(sub, ".sessionpipe", "files"));
+  out = await startWithFiles(71, [f], {}, blobs);
+  assert.equal(out.r.status, "failed");
+  assert.match(out.r.note, /symlink/);
+  assert.equal(out.calls.length, 0);
+  assert.deepEqual(fs.readdirSync(target), []);
+  fs.rmSync(path.join(sub, ".sessionpipe"), { recursive: true, force: true });
+});
+
+test("files: a file that already exists is never overwritten (exclusive create), and the partial write is undone", () => {
+  const dir = path.join(proj, ".sessionpipe", "files", S1);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "b.txt"), "theirs");
+  const r = machine.saveFiles(proj, S1, [
+    { file: { name: "a.txt" }, bytes: Buffer.from("a") },
+    { file: { name: "b.txt" }, bytes: Buffer.from("b") },
+  ]);
+  assert.equal(r.ok, false);
+  assert.match(r.why, /already/);
+  assert.equal(fs.readFileSync(path.join(dir, "b.txt"), "utf8"), "theirs");
+  assert.ok(!fs.existsSync(path.join(dir, "a.txt")));
+  fs.rmSync(path.join(proj, ".sessionpipe"), { recursive: true, force: true });
 });

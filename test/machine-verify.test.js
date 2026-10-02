@@ -224,6 +224,58 @@ test("with both a failing grant and a good confirm, the confirm lets it through"
   assert.equal(r.via, "confirm");
 });
 
+// --- attached files (start only) ----------------------------------------------------------
+
+const SHA = v.b64url(v.sha256(Buffer.from("png bytes")));
+const aFile = (o = {}) => ({ name: "screenshot.png", type: "image/png", size: 183402, sha256: SHA, ...o });
+const startWith = (files, o = {}) => makeCmd({ action: "start", session: crypto.randomUUID(), cwd: "/Users/me/proj", files, ...o });
+
+test("files: a start with valid files runs, names NFC-normalized; no files is today's start", () => {
+  const g = makeGrant(es, br);
+  const decomposed = "Cafe\u0301 notes.pdf";
+  const r = v.authorize(signedJob(1, startWith([aFile(), aFile({ name: decomposed, type: "application/PDF", size: 1, sha256: v.b64url(crypto.randomBytes(32)) })]), g, br), opts());
+  assert.equal(r.ok, true, r.why);
+  assert.equal(r.cmd.files.length, 2);
+  assert.equal(r.cmd.files[1].name, decomposed.normalize("NFC"));
+  assert.deepEqual(Object.keys(r.cmd.files[0]).sort(), ["name", "sha256", "size", "type"]);
+  const ten = Array.from({ length: 10 }, (_, i) => aFile({ name: `f${i}.png`, size: 5 * 1024 * 1024 }));
+  assert.equal(v.authorize(signedJob(2, startWith(ten), g, br), opts()).ok, true, "10 files, 50 MB exactly");
+  assert.equal(v.authorize(signedJob(3, startWith([aFile({ size: 25 * 1024 * 1024, name: "x".repeat(200) })]), g, br), opts()).ok, true, "25 MB, 200-char name");
+  const plain = v.authorize(signedJob(4, startWith(undefined), g, br), opts());
+  assert.equal(plain.ok, true);
+  assert.equal(plain.cmd.files, undefined);
+});
+
+test("files: every rule of the contract refuses the command", () => {
+  const g = makeGrant(es, br);
+  const bad = (files, re, o) => refused(v.authorize(signedJob(1, startWith(files, o), g, br), opts()), re);
+  // only on start
+  refused(v.authorize(signedJob(1, makeCmd({ files: [aFile()] }), g, br), opts()), /only a new session/);
+  // the list
+  bad([], /1 to 10/);
+  bad(null, /1 to 10/);
+  bad({ 0: aFile() }, /1 to 10/);
+  bad(Array.from({ length: 11 }, (_, i) => aFile({ name: `f${i}.png`, size: 1 })), /1 to 10/);
+  bad(["screenshot.png"], /malformed/);
+  // name
+  bad([aFile({ name: undefined })], /no name/);
+  bad([aFile({ name: 42 })], /no name/);
+  bad([aFile({ name: "" })], /1 to 200/);
+  bad([aFile({ name: "x".repeat(201) })], /1 to 200/);
+  for (const n of ["a/b.png", "a\\b.png", "a\u0000b", "tab\there", "new\nline", "del\u007f"]) bad([aFile({ name: n })], /slash or a control/);
+  for (const n of [".", "..", ".env", ".gitignore", ".git"]) bad([aFile({ name: n })], /start with a dot/);
+  bad([aFile({ name: "Shot.PNG" }), aFile({ name: "shot.png", size: 1 })], /same name/);
+  // type
+  for (const t of [undefined, "", "image", "image/", "/png", "image/png; charset=x", "image /png", "-image/png", "a/" + "b".repeat(99)]) bad([aFile({ type: t })], /unusable type/);
+  // size
+  for (const n of [0, -1, 1.5, "100", null, 25 * 1024 * 1024 + 1]) bad([aFile({ size: n })], /1 byte to 25 MB/);
+  // sha256: 43 base64url chars, no padding
+  for (const h of [undefined, "", SHA.slice(0, 42), SHA + "A", SHA.slice(0, 42) + "=", SHA.slice(0, 42) + "+", Buffer.from(v.sha256(Buffer.from("x"))).toString("hex")]) bad([aFile({ sha256: h })], /malformed hash/);
+  // total
+  const three = Array.from({ length: 3 }, (_, i) => aFile({ name: `f${i}.bin`, size: 20 * 1024 * 1024 }));
+  bad(three, /more than 50 MB/);
+});
+
 // --- pairing ----------------------------------------------------------------------------
 
 test("pairing proof: verifies over the machine id and code, with the returned key", () => {
