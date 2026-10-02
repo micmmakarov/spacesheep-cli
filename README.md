@@ -363,3 +363,19 @@ the staged hashes. Anything the tools can do, the CLI can do.
 Node 20 or newer.
 
 MIT.
+
+### Desktop session links during the first turn (1.22.2)
+
+Claude Desktop can write its browser session id just after the first prompt.
+Until a desktop session has a remembered browser link, due tool heartbeats
+reread its transcript/registry facts. The first tool call can therefore supply
+the link before the first turn ends; later heartbeats are bare again. If the id
+is still missing, the next due heartbeat retries (at most once a minute).
+Terminal and headless sessions are unchanged.
+
+This requires upgrading the installed CLI. Existing rows repair on the next
+eligible hook, not by a backfill: blocked sessions with no more hooks stay
+unchanged. A URL already remembered locally does not trigger the retry after a
+failed upload; the next non-tool facts ping can repair that row. The server's
+`parsePing` → `UserMemory.sessionPing` path already merges URL/title on tool
+pings and keeps title precedence on the server (Spacesheep PR 501 / CLI PR 30).
