@@ -147,6 +147,11 @@ session's workspace. With no such project, or for a backfilled row until its nex
 hook fires, the link opens the remote's home. `spacesheep sessions status` also shows what
 the board holds for this machine: sessions, links and accounts.
 
+The running registry name also carries a stable observation time, so a newer live
+name can replace a superseded name on the server. A remembered name cannot undo
+that rename. The server owns the [title wire contract and stored-title precedence](https://github.com/micmmakarov/spacesheep/blob/main/docs/session-title-contract.md);
+the CLI reports facts and does not duplicate that rule.
+
 **Test runs stay off the board.** From 1.17.0 each Claude Code ping carries whether a
 person attended the session, as Claude Code itself tells its hooks
 (`CLAUDE_CODE_SESSION_ATTENDED`). A `claude -p` another session launched, say to check
