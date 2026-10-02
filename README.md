@@ -298,6 +298,27 @@ names, never arguments or outputs. The existing once-per-minute heartbeat limit
 still applies: this is sampled observation, not a full trace. Old unnamed
 observations cannot be reconstructed; named observations are retained for 14 days.
 
+## Stream live values to a page
+
+A **stream** is a named value (`lab-work/gcp-1`) that a machine pushes and every open
+tab of a page draws as it arrives: load average, temperatures, a sensor grid. Nothing is
+published per value. The first push creates the stream.
+
+```bash
+npx -y spacesheep@latest login --scope stream     # a key that can ONLY push to your streams
+npx -y spacesheep@latest stream lab-work/load --every 1s -- cat /proc/loadavg
+npx -y spacesheep@latest stream lab-work/gcp-1 --run "node collect.js" \
+  --on cpu_all="stress-ng --cpu 0 -t 30s" --on-dir /opt/lab/tests
+```
+
+- `--run "cmd"`: a long-running command; every line it prints is a value (JSON lines are sent as JSON, anything else as text). Without `--run` or `--every`, lines are read from stdin.
+- `--every 1s -- cmd`: run a command on an interval and push its output.
+- `--on name=cmd`, `--on-dir DIR`: the page's buttons. Only what is listed runs, and a press from before the process started never runs. The press's data reaches the command as `SS_STREAM_DATA` (JSON). Parse it, never interpolate it: anyone who can open the page can press.
+- `spacesheep streams [prefix]` lists your streams with their rate, how many tabs watch each, and whether a machine is listening.
+
+A page shows a stream once it declares it: `<meta name="ss-streams" content="lab-work/gcp-1">`, then
+`ss.stream("lab-work/gcp-1").draw((last, history, status) => …)`.
+
 ## Commands
 
 | Command | What it does |
@@ -319,6 +340,8 @@ observations cannot be reconstructed; named observations are retained for 14 day
 | `spacesheep sessions status` | Check local reporting hooks, and how many of this machine's sessions the board has, with links and accounts |
 | `spacesheep machine on` | Let spacesheep.dev reach this machine's Claude Code sessions: pairs your passkey here and starts the background listener. Options: `--folder` (repeatable; default the current folder), `--mode safe\|auto`, `--name`, `--no-service` |
 | `spacesheep machine status \| pair \| off` | Check the listener; add another passkey; stop it and forget the passkeys it trusted |
+| `spacesheep stream <name>` | Push live values to a stream. Options: `--run "cmd"`, `--every 1s -- cmd`, `--on name=cmd` (repeatable), `--on-dir DIR`, `--once` |
+| `spacesheep streams [prefix]` | Your streams: rate, watchers, whether a machine listens |
 | `spacesheep update` | Install the newest version globally |
 
 `<space>` is a UUID or a `spacesheep.dev/@user/slug` URL.

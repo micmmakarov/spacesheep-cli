@@ -61,6 +61,15 @@ const HELP = `
                                            spacesheep as its sink, then removes this CLI's own hooks
     spacesheep sessions status | uninstall | backfill | forget
                                            this CLI's old reporting hooks
+    spacesheep stream <name> --run "cmd"   push every line a command prints to a live stream (JSON or text);
+                                           pages that declare it (<meta name="ss-streams" content="<name>">) draw it live
+    spacesheep stream <name> --every 1s -- cmd [args]
+                                           run a command on an interval and push its output
+    spacesheep stream <name> ... --on name=cmd [--on …] [--on-dir DIR]
+                                           run a page's button presses here: only what is listed runs
+    spacesheep streams [prefix]            your streams: rate, who is watching, whether a machine listens
+    spacesheep login --scope stream [--name NAME]
+                                           a key that can only push to your streams — for a lab box
     spacesheep update                      install the newest version globally
     spacesheep memory install              same as sessions install (sessionpipe sends the turns at tier 2)
     spacesheep memory status | uninstall   this CLI's old turn-sync hooks: what is wired; remove them
@@ -90,6 +99,7 @@ function parse(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const take = () => { const v = argv[++i]; if (v === undefined) throw new Error(`${a} needs a value`); return v; };
+    if (a === "--") { opts.cmd = argv.slice(i + 1); break; }
     if (a === "--json") opts.json = true;
     else if (a === "-h" || a === "--help") opts.help = true;
     else if (a === "-v" || a === "--version") opts.version = true;
@@ -99,6 +109,7 @@ function parse(argv) {
     else if (a === "--email") opts.emails.push(take());
     else if (a === "--config-dir") (opts.configDir = opts.configDir || []).push(take());
     else if (a === "--folder") (opts.folder = opts.folder || []).push(take());
+    else if (a === "--on") (opts.on = opts.on || []).push(take());
     else if (a.startsWith("--") && a.includes("=")) { const [k, v] = a.slice(2).split(/=(.*)/); opts[camel(k)] = v; }
     else if (FLAGS.has(a)) opts[camel(a.slice(2))] = true;
     else if (a.startsWith("--")) opts[camel(a.slice(2))] = take();
@@ -119,8 +130,11 @@ function client() {
 }
 
 const commands = {
-  async login() {
-    const { key, username } = await deviceLogin(cfg.origin(), log);
+  async login(opts) {
+    // `--scope stream`: a key that can only push to your streams — the kind to leave on a lab box.
+    const scope = opts.scope === "stream" || opts.scope === "streams" ? "stream" : undefined;
+    if (opts.scope && !scope) throw new Error(`--scope takes "stream" (a streams-only key); without it the key is a full one`);
+    const { key, username } = await deviceLogin(cfg.origin(), log, scope ? { scope, name: (opts.name || os.hostname().split(".")[0] || "machine").slice(0, 60) } : undefined);
     cfg.writeConfig({ ...cfg.readConfig(), key, username, origin: process.env.SPACESHEEP_ORIGIN || undefined });
     log(`\n  ✓ Signed in${username ? ` as @${username}` : ""}. Key saved to ${cfg.configPath()}\n`);
   },
@@ -219,6 +233,8 @@ const commands = {
     if (sub === "status" || !sub) return mc.status(opts, out);
     throw new Error("usage: spacesheep machine on [--folder DIR]... [--mode safe|auto] [--name NAME] [--no-service] | status | pair | off | run");
   },
+  async stream(opts) { return require("../lib/stream").run(opts, cfg, log); },
+  async streams(opts) { return require("../lib/stream").list(opts, cfg, out); },
   async update() { return selfUpdate(log); },
   async memory(opts) {
     const mem = require("../lib/memory");
