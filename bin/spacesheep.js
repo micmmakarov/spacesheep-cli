@@ -1,5 +1,12 @@
 #!/usr/bin/env node
 "use strict";
+// Before loading modules that need modern Node, so even an old npx gives a useful error.
+if (process.argv[2] === "machine" && process.argv[3] === "on" && Number(process.versions.node.split(".")[0]) < 20) {
+  console.error(`spacesheep machine on requires Node >= 20; running ${process.version} from ${process.execPath}.`);
+  console.error("Put Node >= 20 first on PATH (Intel Homebrew: export PATH=\"/usr/local/opt/node/bin:$PATH\"), then rerun npx -y spacesheep@latest machine on.");
+  process.exit(1);
+}
+
 // `memory sync` is a Claude Code / Codex hook: the tool waits for it to exit, so
 // it runs before anything else is required and never touches the MCP client.
 if (process.argv[2] === "memory" && process.argv[3] === "sync") {
